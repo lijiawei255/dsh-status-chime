@@ -69,7 +69,17 @@ const BAILIAN_CLI = process.env.VOICE_ALERTS_BAILIAN_CLI ?? join(
 );
 
 const args = process.argv.slice(2);
-const mode = args[0] ?? 'build';
+/**
+ * The subcommand, or `null` when none was given.
+ *
+ * Running with no argument used to default silently to `build`, which meant that
+ * anyone who typed `node scripts/build.mjs` to see what the tool does triggered a
+ * full paid synthesis run and overwrote every bundled clip in `assets/clips/`.
+ * No help text, no confirmation, and the files it replaces are the ones shipped in
+ * the repository. Requiring the subcommand explicitly costs one word and removes
+ * the whole failure mode.
+ */
+const mode = args[0] ?? null;
 const dryRun = args.includes('--dry-run');
 
 /**
@@ -271,6 +281,19 @@ switch (mode) {
   case 'build':
   case 'clip':
     cmdBuild(positional(0));
+    break;
+  case null:
+    // Print usage rather than synthesising: see the note on `mode` above.
+    log('usage: node scripts/build.mjs <subcommand> [--dry-run]');
+    log('');
+    log('  voices              list the voice candidates from clips.json');
+    log('  audition [name]     synthesise one sample per candidate, for listening');
+    log('  build               synthesise every scene into mp3 + wav (calls the TTS API)');
+    log('  clip <scene>        synthesise a single scene');
+    log('');
+    log('  --dry-run           print the commands without running them or writing files');
+    log('');
+    log('Nothing was generated. Re-run with a subcommand to proceed.');
     break;
   default:
     fail(`unknown subcommand: ${mode} (expected: voices / audition / build / clip)`);
