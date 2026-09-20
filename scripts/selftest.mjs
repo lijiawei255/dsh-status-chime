@@ -188,7 +188,7 @@ function markNow() { return { info: infoLogs.length, warn: warnLogs.length }; }
 /**
  * Scenes the plugin selected, read from the log.
  * In silent mode a successful pick shows up as "playing <scene>"; when a clip is
- * genuinely absent it shows up as a "no audio for <scene>" warning, which is why
+ * genuinely absent it shows up as a "no <lang> audio for <scene>" warning, which is why
  * both sources are inspected.
  */
 function chosenSinceMark(mark) {

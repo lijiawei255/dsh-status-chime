@@ -20,6 +20,7 @@ Each scene was checked against the DSH source first, then triggered for real whe
 | `job-done` | `jobs.onJobDone`, status `completed` | ✅ observed |
 | `goal-complete` | `session/event` → `goal/change`, operation `complete` | ✅ observed |
 | `goal-blocked` | `goal/change`, operation `block` | ✅ observed |
+| `approval` | `session/event` → `approval/asked` (also the `approval/request` waterfall) | ✅ observed — heard on a real approval request, but **which of the two paths delivered it is unresolved**; they play the same clip. See §2b |
 | `job-failed` | `jobs.onJobDone`, status `failed` | ⚠️ **never observed** — see §4 |
 
 "Observed" means the host log contains a `playing <scene>` line **without** the `manual`
@@ -71,8 +72,8 @@ regression: the Chinese set has the same pair at 0.07s. Two clips of the same ur
 deliberately close, and no claim is made that every adjacent pair is distinguishable.
 
 An earlier English `turn-error` was 6.55 s against a 6.46 s `job-failed` — a 0.10 s gap that
-no listener could resolve, where the Chinese pair differs by 2.02 s (34%). The line was
-lengthened and re-measured to 7.90 s. **Word counts are not a proxy for duration; the
+no listener could resolve, where the Chinese pair differs by 2.02 s (25% of the longer clip; the
+percentages in this document all use that convention). The line was lengthened and re-measured to 7.90 s. **Word counts are not a proxy for duration; the
 durations are what was checked.**
 
 A human also listened to all eight Chinese clips and confirmed each played through
@@ -88,7 +89,7 @@ gate only.
 | The switch survives a restart | `lang en` writes `language` into the config file; the suite re-reads the file and asserts the value |
 | An unknown language does not mute the plugin | Setting `language: "klingon"` falls back to Chinese; asserted via `status` |
 | An unknown language is rejected on the command | `/voice-alerts lang klingon` returns an error naming the allowed values |
-| The English voice is a native English voice | Three candidates were ranked; two independent runs both placed `loongmary` first and the Chinese voice reading English last |
+| The English voice is a native English voice | Three candidates were ranked (`scripts/qa.mjs rank`); a run placed `loongmary` first and the Chinese voice reading English last, with `naturalness 4 / character 5`. A repeat run kept the same order, but `qa/` is not version-controlled, so no ranking artifact ships with the repo |
 
 **Not verified:** that a missing English clip warns rather than silently falling back. The
 shipped package always contains the English set, and packaged assets are the last link in
@@ -109,7 +110,10 @@ silence with a plausible length** passed every gate. Measured levels:
 | A fully silent file | −91 dB | −91 dB |
 | **Floors applied** | **≥ −30 dB** | **≥ −35 dB** |
 
-Both floors clear the worst real clip by more than 25 dB.
+**Margins, computed per floor:** the peak floor clears the worst shipped clip by **25.8 dB**
+(−4.2 dB against −30 dB), but the mean floor clears it by **14.4 dB** (−20.6 dB against
+−35 dB). Both are comfortable; the two are not the same margin, and an earlier version of
+this line wrongly said "more than 25 dB" for both.
 
 An existing tool, `ttsproof` (v0.4.0), was evaluated first. It catches clipping and
 truncation, but **not a fully silent file**: its source sets `empty_audio` only when the file
@@ -233,7 +237,7 @@ It runs against a temporary `DSH_HOME`, so it cannot disturb a real installation
 
 | Claim | Confidence |
 |---|---|
-| The eight audio clips are correct and audible | **Verified** (measurement + listening) |
+| The audio clips are correct and audible | **Verified** — all 16 through measurement; the eight **Chinese** clips additionally by listening. The English set has not had the listening pass (see §2) |
 | The plugin plays on a clean Windows install with no third-party dependency | **Verified** |
 | Seven of eight scenes fire on real events | **Verified** |
 | `approval` fired on a real approval request | **Heard it, but the exact path is unresolved** — the `approval/asked` session event and the `approval/request` waterfall play the same clip, so hearing it does not tell the two apart |

@@ -28,7 +28,7 @@
  *   every gate as long as the file had a plausible length — which is one of the
  *   classic TTS failure modes. Measured on the shipped clips, healthy audio peaks at
  *   -4.2..-1.9 dB and averages -20.6..-16.6 dB, while a fully silent file measures
- *   -91 dB. The floors sit about 25 dB below every real clip and far above silence.
+ *   -91 dB. The peak floor sits 25.8 dB below the worst real clip and the mean floor 14.4 dB
  *
  * Why speech rate is advisory and per-batch
  *   A fixed band does not work here: the Chinese clips deliberately speak slowly
