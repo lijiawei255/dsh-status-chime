@@ -299,7 +299,7 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 dsh-status-chime/
 ├── lib/index.js                  # 插件主体，唯一运行时代码
 ├── assets/
-│   ├── clips/                    # 7 条音频，每条 mp3 + wav
+│   ├── clips/                    # 8 条音频，每条 mp3 + wav
 │   ├── clips.json                # 文案/音色/参数的唯一事实源
 │   ├── voice-alerts.config.json  # 配置模板
 │   └── play.ps1                  # PowerShell 回退播放器（纯 ASCII，原因见文件头）

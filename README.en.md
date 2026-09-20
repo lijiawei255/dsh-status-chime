@@ -316,7 +316,7 @@ The scene is **kept** (it does work for tool-task failures), but its trigger **h
 dsh-status-chime/
 ├── lib/index.js                  # the plugin; the only runtime code
 ├── assets/
-│   ├── clips/                    # 7 clips, each as mp3 + wav
+│   ├── clips/                    # 8 clips, each as mp3 + wav
 │   ├── clips.json                # single source of truth for lines, voice and settings
 │   ├── voice-alerts.config.json  # config template
 │   └── play.ps1                  # PowerShell fallback player (pure ASCII; see the file header)

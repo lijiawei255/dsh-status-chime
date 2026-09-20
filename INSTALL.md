@@ -101,7 +101,7 @@ To let the user hear it immediately:
 /voice-alerts
 ```
 
-plays all seven clips in sequence.
+plays all eight clips in sequence.
 
 ## Step 5 — Confirm it actually reaches the speakers
 

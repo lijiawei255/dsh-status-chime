@@ -45,17 +45,17 @@ How the two harder ones were triggered:
 
 ## 2. Audio layer
 
-All seven clips were synthesized through Bailian TTS, normalised with `ffmpeg loudnorm`, and
+All eight clips were synthesized through Bailian TTS, normalised with `ffmpeg loudnorm`, and
 passed the quality gate in `scripts/qa.mjs clips`:
 
 | Check | Result |
 |---|---|
-| ASR character similarity against the intended line | **1.000 on all seven** |
-| Clarity, cleanliness (hard gates) | 10 / 10 on all seven |
+| ASR character similarity against the intended line | **1.000 on all eight** |
+| Clarity, cleanliness (hard gates) | 10 / 10 on all eight |
 | Peak level, no clipping | between −4.2 dB and −1.9 dB |
 | Duration gradient preserved | 7.97 / 5.95 / 4.78 / 2.59 / 2.16 / 2.09 / 1.58 s |
 
-A human also listened to all seven and confirmed each one played through completely.
+A human also listened to all eight and confirmed each one played through completely.
 
 ## 3. Backend layer
 
@@ -66,7 +66,7 @@ Measured with `scripts/selftest.mjs`, which forces each backend through the real
 | PowerShell path selects `.wav` and plays | ✅ the plugin resolves the wav, and `PlaySync` blocks for the clip duration (1.76 s for a 1.58 s clip) |
 | With ffmpeg absent, playback falls back automatically and still works | ✅ forcing `player: auto` with a bogus `ffplayPath` yields `Player: PowerShell SoundPlayer` and a successful playback |
 | An explicitly requested but missing ffplay fails loudly | ✅ it reports unavailable instead of silently switching backends |
-| Packaged clips resolve with no `clipsDir` configured | ✅ all seven found in `assets/clips/` |
+| Packaged clips resolve with no `clipsDir` configured | ✅ all eight found in `assets/clips/` |
 | A user-level file takes precedence over a packaged one | ✅ |
 
 Measured startup overhead of the PowerShell path: roughly **0.4 s** on top of the clip
