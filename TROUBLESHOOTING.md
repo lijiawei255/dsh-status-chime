@@ -14,7 +14,7 @@ Search it for `voice-alerts`. What you find there splits the problem in half imm
 |---|---|
 | `[voice-alerts] active v0.3.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
 | `playing <scene>` | The plugin started a player for that scene. If you still hear nothing, see **2** and **3**. |
-| `no audio for <scene>` | The clip file is missing. See **6**. |
+| `no <lang> audio for <scene>` | That language's clip file is missing. See **6**. |
 | `throttled <scene>` | The repeat-suppression window caught it. Normal behaviour. |
 | `neither ffplay nor Windows PowerShell is available` | See **2**. |
 
@@ -87,7 +87,7 @@ you ran something, check for that.
 The log will say:
 
 ```
-no audio for <scene>; looked in: <dir1> | <dir2> | <dir3>
+no zh audio for <scene>; looked in: <dir1> | <dir2> | <dir3>
 ```
 
 The plugin resolves each clip through three levels, in order:
@@ -175,11 +175,12 @@ ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the wor
 root … if you really meant it, make it explicit by running this command again with the -w flag
 ```
 
-Use pnpm 10 or newer — pnpm 11 accepts the command as-is. Alternatively pass the flag
-through, since `dsh plugin` forwards arguments verbatim:
+**Measured, not inferred:** pnpm **9** rejects the command; pnpm **11.8.0** accepts it as-is.
+Whether pnpm 10 works was not tested. The reliable fix is the `-w` flag, which works
+regardless of version, since `dsh plugin` forwards arguments verbatim:
 
 ```powershell
-dsh plugin --profile desktop add -w <package>
+dsh plugin --profile <PROFILE> add -w <package>
 ```
 
 Note that this is a pnpm/DSH interaction, not a defect in this plugin: the same command
@@ -231,5 +232,5 @@ Open an issue with:
 1. The `[voice-alerts] active …` line from the log (it states the detected player and config
    path)
 2. The output of `/voice-alerts status`
-3. The `playing` / `no audio for` / `throttled` lines around the moment you expected sound
+3. The `playing` / `no <lang> audio for` / `throttled` lines around the moment you expected sound
 4. Whether you have ffmpeg installed

@@ -26,18 +26,30 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 
 ## 八个场景
 
-时长是**刻意设计**的：**长 = 有事需要你，短 = 有事情结束了**。所以即使不看屏幕，光凭声音长短就能判断要不要马上过去。
+时长是**刻意设计**的：**长 = 有事需要你，短 = 有事情结束了**。
 
-| 场景 | 什么时候响 | 时长 | 时长定位 |
-|---|---|---|---|
-| `turn-error` | 本轮失败，或撞到 token 上限 | **7.97s** | 最长 |
-| `job-failed` | 后台任务失败 | 5.95s | 长 |
-| `goal-blocked` | 目标受阻，需要你介入 | 4.78s | 中长 |
-| `approval` | 有操作在等你批准 | 3.00s | 短 |
-| `job-done` | 后台任务完成 | 2.59s | 中 |
-| `goal-complete` | 目标整体完成（只响一次，不是每轮） | 2.16s | 短 |
-| `needs-input` | 代理停下来等你回答 | 2.09s | 短 |
-| `turn-done` | 你发起的那一轮正常结束 | 1.58s | 最短 |
+准确地说，它是**三个带**，而不是「每一条都比下一条长一截」：
+
+| 带 | 时长范围 | 场景 |
+|---|---|---|
+| 失败 / 受阻 —— 最需要你 | 4.8 – 8.0s | `turn-error`、`job-failed`、`goal-blocked` |
+| 在等你动手 | 3.0s | `approval` |
+| 事情结束（或只是简单问一句） | 1.6 – 2.6s | `job-done`、`goal-complete`、`needs-input`、`turn-done` |
+
+**同一带内的两条刻意靠得很近**，因为它们的紧急度本来就同级：`goal-complete`（2.16s）和 `needs-input`（2.09s）只差 **0.07s**，中文那套也一样（差 0.07s）。**靠声音长短能分辨的是「带」，不是每一条。**
+
+| 场景 | 什么时候响 | 中文 | 英文 | 紧急度 |
+|---|---|---|---|---|
+| `turn-error` | 本轮失败，或撞到 token 上限 | **7.97s** | 7.90s | 失败/受阻 —— 最长 |
+| `job-failed` | 后台任务失败 | 5.95s | 6.46s | 失败/受阻 |
+| `goal-blocked` | 目标受阻，需要你介入 | 4.78s | 4.85s | 失败/受阻 |
+| `approval` | 有操作在等你批准 | 3.00s | 3.00s | 在等你动手 |
+| `job-done` | 后台任务完成 | 2.59s | 2.59s | 已结束 |
+| `goal-complete` | 目标整体完成（只响一次，不是每轮） | 2.16s | 2.16s | 已结束 |
+| `needs-input` | 代理停下来等你回答 | 2.09s | 2.09s | 简单问一句 |
+| `turn-done` | 你发起的那一轮正常结束 | 1.58s | 1.92s | 已结束 —— 最短 |
+
+⚠️ **两套时长不一样，别混用。** 中文和英文是各自合成的（不同音色、不同语言），所以顺序一致但数值不同：英文 `job-failed` 是 **6.46s**，中文是 **5.95s**。上表两列都给了，按你实际用的语言看那一列。
 
 两条**过滤规则**值得单独说明，它们避免了这个插件变成噪音源：
 
@@ -82,17 +94,40 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 | `job-failed` | 后台任务失败，请回到 DSH 查看详情。 | The background job failed, and it needs your attention. Check DSH for details. |
 | `turn-error` | 任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。 | The turn failed, so this round did not finish. Open DSH to see the error details, then try again. |
 
-英文版的时长梯度是 **1.92s → 7.90s**，与中文**同样单调**（同样按严重度递增），且**相邻两条至少相差 22%**，所以英文下也能靠长短分辨紧急程度。
+英文版的时长梯度是 **1.92s → 7.90s**，与中文**同样单调**（同样按严重度递增）。真正拉开的是**三个紧急度带**：跨进「失败/受阻」带的那一步有 **38%**（3.00s → 4.85s）。**同一带内刻意靠得近** —— `goal-complete`（2.16s）与 `needs-input`（2.09s）只差 **0.072s**，中文那套也一样。所以靠长短分辨的是**带**，不是每一条。
 
-> ⚠️ 这里踩过一个坑，记下来：英文 `turn-error` 最初只有 16 个词、6.55s，而 `job-failed` 是 6.46s —— 只差 0.10s，**耳朵根本分不出来**。中文那边两者差 2.02s（34%）。后来把英文错误文案加长到 19 个词，才恢复到 7.90s / 1.44s 的差距。**如果你改文案，记得重新量一遍时长**，别只看中文字数。
+> ⚠️ 这里踩过一个坑，记下来：英文 `turn-error` 最初只有 16 个词、6.55s，而 `job-failed` 是 6.46s —— 只差 0.10s，**耳朵根本分不出来**。中文那边两者差 2.02s（**25%**，相对较长者；本文件所有百分比都按这个口径）。后来把英文错误文案加长到 19 个词，才恢复到 7.90s / 1.44s 的差距。**如果你改文案，记得重新量一遍时长**，别只看中文字数。
 
-英文用的音色是 `loongmary`（温暖英音），**不是让中文音色去读英文**。试听过三个候选并做了排序，中文音色读英文被评为「明显合成感、节奏不自然」（自然度 5/10），两次独立排序都排最后。
+英文用的音色是 `loongmary`（温暖英音），**不是让中文音色去读英文**。试听过三个候选并做了排序（`scripts/qa.mjs rank`，产物写到 `qa/`，该目录不进版本控制；重跑一次名次不变）。中文音色读英文得分最低，评语是「明显合成感、节奏不自然」——**自然度 4/10、音色 5/10**（这两个分数容易记混，`naturalness` 是 4，`character` 才是 5）。
 
 `/voice-alerts status` 会同时列出两种语言各自的音频是否齐备：
 
 ```
 Clip sets: zh (active): all clips present  |  en: all clips present
 ```
+
+## 装之前先知道三件事
+
+1. **平台：Windows 10/11。** 保底播放器用的是 Windows 自带的 PowerShell + `System.Media.SoundPlayer`，**没有 macOS / Linux 支持**。装了 ffmpeg 会优先用 `ffplay`，但那只是可选增强。
+2. **需要 DSH Desktop**，以及能跑 `dsh` 命令的终端。装插件走 `dsh plugin`，它内部调用 **pnpm**（见下面的坑）。
+3. **音频不用装任何东西** —— 中英两套 32 个音频文件都在包里。
+
+### ⚠️ 一次性提醒：包名和运行时名字不一样
+
+这个容易让人找错地方，先说清楚：
+
+| | 名字 |
+|---|---|
+| **npm 包 / GitHub 仓库** | `dsh-status-chime` |
+| **斜杠命令** | `/voice-alerts` |
+| **日志前缀** | `[voice-alerts]` |
+| **配置文件** | `$DSH_HOME/voice-alerts/voice-alerts.config.json` |
+| **音频目录** | `$DSH_HOME/voice-alerts/clips/` |
+| **cordis id** | `voice-alerts` |
+
+**包名在 0.3.0 从 `dsh-voice-alerts` 改成了 `dsh-status-chime`**（原来的名字和社区目录里另一个插件只差一个字母，会被市场规则隐藏）。改名**只动包名和仓库名**：命令、配置路径、日志前缀全都还是 `voice-alerts`，所以老用户升级不会坏。
+
+**排查问题时去日志里 grep `voice-alerts`，不是 `dsh-status-chime`。**
 
 ## 安装
 
@@ -106,16 +141,26 @@ Clip sets: zh (active): all clips present  |  en: all clips present
 
 ### 方式二：自己敲命令
 
+把 `<PROFILE>` 换成你自己的 profile 名（通常是 `desktop`）。**先看一眼 `$DSH_HOME/profiles/` 下有哪些目录再决定**，不要照抄别人的：
+
 ```powershell
 # 从 GitHub 直接装
-dsh plugin --profile desktop add github:lijiawei255/dsh-status-chime
+dsh plugin --profile <PROFILE> add github:lijiawei255/dsh-status-chime
 
 # 或者先 clone / 下载 ZIP，再指向本地目录
 git clone https://github.com/lijiawei255/dsh-status-chime
-dsh plugin --profile desktop add .\dsh-status-chime
+dsh plugin --profile <PROFILE> add .\dsh-status-chime
 ```
 
 这条命令会做两件事：把包装进 profile，并把包登记为一个 profile 层（前提是包里声明了 `dsh.bundle`，本仓库已经声明了）。
+
+**⚠️ 如果报 `ERR_PNPM_ADDING_TO_ROOT`**：profile 自带一个声明了 `packages: [.]` 的 `pnpm-workspace.yaml`，pnpm 9 会因此拒绝裸 `add`。加一个 `-w` 即可：
+
+```powershell
+dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
+```
+
+升级 pnpm 到 10 以上也能绕过。详见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 11 条。
 
 **装完必须完全重启 DSH Desktop**，否则插件不会加载。
 
@@ -127,11 +172,19 @@ dsh plugin --profile desktop add .\dsh-status-chime
 /voice-alerts status
 ```
 
-看到 `Voice alerts: on (v0.3.0)` 和 `Scenes (8)` 就说明装好了。想听一遍全部八条：
+看到 `Voice alerts: on (v0.3.0)`、`Language: zh`、`Scenes (8)` 就说明装好了。想听一遍全部八条：
 
 ```
 /voice-alerts
 ```
+
+### 卸载
+
+```powershell
+dsh plugin --profile <PROFILE> remove dsh-status-chime
+```
+
+卸载**不会**删除 `$DSH_HOME/voice-alerts/`（配置、音频、质检报告都在那儿）。想彻底清干净就手动删掉那个目录。同样需要**完全重启 DSH Desktop** 才生效。
 
 ## 它怎么工作
 
@@ -147,7 +200,8 @@ DSH 事件  ──▶  lib/index.js  ──▶  聚合 / 节流 / 优先级  ─
 | `session/event` → `goal/change` | 目标的 `complete` 与 `block` |
 | `jobs.onJobDone` | 后台任务的 `completed` 与 `failed` |
 | `tools/pre-execute` | 工具名命中 `waitingTools` 时，说明代理要停下来等你 |
-| `approval/request` | 权限询问（仅在审批策略为 `ask` 时才会派发） |
+| `session/event` → `approval/asked` | **主路径**：审批策略为 `ask` 时必定派发 |
+| `approval/request` | **兜底**：作用域瀑布，同样只在 `ask` 下可能派发；两条路播同一条音 |
 
 **播放规则**：同一 400 毫秒窗口内的多个事件只播**优先级最高**的那条；同一场景 1.5 秒内不重复；新的提示会打断正在播的那条。
 
@@ -166,7 +220,7 @@ DSH 事件  ──▶  lib/index.js  ──▶  聚合 / 节流 / 优先级  ─
 `tools/qw_local_omni.py` 把**多段候选音频一次性**交给 Qwen-Omni，让它横向比较并按维度打分：
 
 ```powershell
-python tools/qw_local_omni.py preview/a.mp3 preview/b.mp3 preview/c.mp3 `
+python tools/qw_local_omni.py preview/en-loongmary.mp3 preview/en-loongeva_v3.6.mp3 preview/en-longanyuanfei.mp3 `
   --message "横向比较这几段录音，按清晰度/自然度/音色/干净度打分并排序"
 ```
 
@@ -182,18 +236,18 @@ python tools/qw_local_omni.py preview/a.mp3 preview/b.mp3 preview/c.mp3 `
 python tools/qw_local_asr.py assets/clips/turn-error.mp3 --lang zh
 ```
 
-这条是**可以当硬门槛的客观指标**：文案是已知的，转写对不对是机械可判的。本项目 8 条音频的相似度都是 **1.000**。
+这条是**可以当硬门槛的客观指标**：文案是已知的，转写对不对是机械可判的。本项目中英各 8 条、共 16 条音频的相似度都是 **1.000**。
 
 **3. 时长梯度作为信息编码**
 
 上面表格里的时长不是随手定的，而是把「严重程度」编码进了音频自身：**长 = 需要你出手**。这样即使手机在旁边、屏幕没看，也能靠声音长短判断该不该放下手里的事。
 
-**由此得到的完整流程**（`scripts/` 里三个脚本，可直接复现）：
+**由此得到的完整流程**（`scripts/` 里两个脚本，可直接复现）：
 
 ```
 scripts/build.mjs audition    出多个音色候选
       ↓
-scripts/qa.mjs rank           全模态模型横向排序 + ASR 回读
+scripts/qa.mjs rank           全模态模型横向排序（不做 ASR；回读在下一步）
       ↓
 人听筛出来的前 2-3 个，拍板     ← 决策量被压缩到很少
       ↓
@@ -208,7 +262,7 @@ scripts/qa.mjs clips          全部质检过关
 
 | 检查 | 性质 | 为什么加 |
 |---|---|---|
-| **静音下限**（峰值 ≥ −30 dB、均值 ≥ −35 dB） | 硬门槛 | 原来的峰值检查**只抓削波**，所以「时长正常但内容全静音」这种经典 TTS 失效**能全项通过**。实测成品峰值 −4.2…−1.9 dB、均值 −20.6…−16.6 dB，而全静音是 −91 dB —— 两条线离两边都有 25 dB 以上余量 |
+| **静音下限**（峰值 ≥ −30 dB、均值 ≥ −35 dB） | 硬门槛 | 原来的峰值检查**只抓削波**，所以「时长正常但内容全静音」这种经典 TTS 失效**能全项通过**。实测成品峰值 −4.2…−1.9 dB、均值 −20.6…−16.6 dB，而全静音是 −91 dB。**两条线的余量不一样**：峰值门槛离最差成品 **25.8 dB**（−4.2 vs −30），均值门槛 **14.4 dB**（−20.6 vs −35） |
 | **净语速**（去掉停顿后的单位/秒） | 参考项 | 中文**刻意放慢**（rate 0.95），套用人类播报那个 3.2–5.5 字/秒会把八条里的**七条**判失败。对这个项目真正有意义的是**条与条之间的一致性**（因为时长承载紧急度），所以跟**同语言中位数**比；少于 5 个单位的短句豁免，否则两个词的 clip 会假报警 |
 | **UTMOS**（MOS 预测器） | 参考项 | 给自然度一个**可复现**的数字，补上「大模型打分不稳定」那一环。**必须按语言分别比**：它给英文八条的分**全部高于**中文八条（4.38–4.51 vs 3.75–4.28），跨语言比会读成中文那套有缺陷 |
 
@@ -232,6 +286,9 @@ scripts/qa.mjs clips          全部质检过关
 | `interrupt` | `true` | 新提示是否打断正在播的 |
 | `scenes.<场景>.enabled` | `true` | 单独关掉某个场景 |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
+| `ffplayPath` | `null` | 显式指定 ffplay 路径（不在 PATH 上时用） |
+| `playPs1Path` | `null` | 显式指定回退脚本 `play.ps1` 的路径 |
+| `commandName` | `"voice-alerts"` | 斜杠命令名。与别的插件重名时只丢命令，不影响出声 |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | 命中即视为「在等你回答」；DSH 若改工具名可在此覆盖 |
 | `language` | `"zh"` | 语音语言：`zh` / `en`；无法识别的值回退到 `zh`（不会静默） |
 | `watchApprovals` | `true` | 审批请求是否出声（只在策略为 `ask` 时可能触发） |
@@ -249,7 +306,7 @@ scripts/qa.mjs clips          全部质检过关
 
 ## 换成你自己的声音
 
-音频不是必须用仓库里这 7 条。完整流程：
+音频不是必须用仓库里这 8 条（中英各 8 条）。完整流程：
 
 ```powershell
 # 1. 改 assets/clips.json：文案在 clips.<场景>.text，音色在 model/voice/instruction
@@ -267,6 +324,15 @@ node scripts/qa.mjs clips                # 质检
 
 自己生成的音频放在 `$DSH_HOME/voice-alerts/clips/` 会自动优先于包内的（逐文件覆盖，所以只想换一条也可以）。
 
+**文件名规则要记住**（想只替换一条英文音频时必须知道）：
+
+| 语言 | 文件名 |
+|---|---|
+| 中文（默认） | `<场景>.mp3` / `.wav`，例如 `turn-done.mp3` |
+| 英文 | `<场景>.en.mp3` / `.en.wav`，例如 `turn-done.en.mp3` |
+
+**默认语言用不带后缀的名字，其它语言加 `.<语言码>` 中缀。** 所以只想换英文的 `approval`，就放一个 `approval.en.mp3`（以及 `.wav`，如果你用 PowerShell 回退播放器）。
+
 ## 装了没声音？
 
 按这个顺序排查，能覆盖绝大多数情况。完整版见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
@@ -276,7 +342,7 @@ node scripts/qa.mjs clips                # 质检
 3. **Windows 音量合成器把 `ffplay`（或 `powershell.exe`）单独静音了**——这是最常见的原因。右键任务栏音量图标 → 打开音量合成器，检查对应条目。
 4. 输出设备选错了。
 5. 某个场景被关掉了，或 `enabled` 是 `false`。
-6. 日志里有 `no audio for <场景>` → 音频文件缺失。
+6. 日志里有 `no <语言> audio for <场景>`（例如 `no zh audio for turn-done`）→ 该语言的音频文件缺失。
 7. 日志里有 `throttled <场景>` → 被节流窗口挡住了，属于正常行为。
 
 日志位置：`%APPDATA%\DSH Desktop\logs\host\dsh-<日期>.log`，搜 `voice-alerts`。
@@ -333,7 +399,7 @@ node scripts/qa.mjs clips                # 质检
 | 层级 | 状态 |
 |---|---|
 | **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
-| **音频层** | 中英各 8 条、共 16 条全部通过质检（ASR 相似度 1.000、四维达标、无削波） |
+| **音频层** | 中英各 8 条、共 16 条**全部通过自动质检**（ASR 相似度 1.000、清晰/干净 10/10、无削波）。其中**中文那 8 条另做过逐条耳听确认**；**英文那 8 条没做过这一步**，只过了自动质检 |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
 | **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**50 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、以及语言切换与回退 |
 | **语言层** | 默认中文、`lang en` 切换后确实改选英文文件（自测断言的是**解析到的文件名**，不只是状态文字）；配置里写无法识别的语言会**回退到中文**而不是静默 |
@@ -358,18 +424,32 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 ```
 dsh-status-chime/
 ├── lib/index.js                  # 插件主体，唯一运行时代码
+├── cordis.patch.yml              # 声明这个包是 profile 层（dsh.bundle 指向它）
+├── package.json                  # 包名、dsh.bundle 声明、engines
 ├── assets/
-│   ├── clips/                    # 8 场景 × 2 语言 = 16 条音频，每条 mp3 + wav
+│   ├── clips/                    # 8 场景 × 2 语言 = 16 条音频，每条 mp3 + wav（共 32 个文件）
 │   ├── clips.json                # 文案/音色/参数的唯一事实源
 │   ├── voice-alerts.config.json  # 配置模板
 │   └── play.ps1                  # PowerShell 回退播放器（纯 ASCII，原因见文件头）
-├── tools/                        # 百炼本地音频辅助脚本（ASR / Omni）
-├── scripts/                      # 生成 / 质检 / 自检 / 隐私扫描
+├── tools/                        # 百炼本地音频辅助脚本（ASR / Omni / UTMOS）
+├── scripts/                      # 生成 / 质检 / 自检 / 负向验证 / 隐私扫描
+│   ├── build.mjs                 # 生成音频（支持 --lang）
+│   ├── qa.mjs                    # 质检（支持 --lang）
+│   ├── selftest.mjs              # 离线自测，50 项
+│   ├── qa-negative-control.mjs   # 证明质检门槛真的会拦下坏音频
+│   ├── verify-local-install.mjs  # 验证已安装的单文件版本
+│   ├── scan-sensitive.mjs        # 隐私/措辞扫描
+│   └── scan-sensitive.verify.mjs # 证明扫描器真的抓得到
 ├── docs/verification.md          # 逐条验证记录
+├── .github/workflows/verify.yml  # CI：干净 Windows 上跑安装 + 自测 + 扫描
 ├── INSTALL.md                    # 给 Agent 看的安装步骤
 ├── TROUBLESHOOTING.md            # 没声音时的排查清单
-└── CHANGELOG.md
+├── README.en.md                  # 英文说明
+├── CHANGELOG.md
+└── LICENSE                       # MIT
 ```
+
+`qa/`、`preview/`、`tmp/` 是脚本跑出来的中间产物，已在 `.gitignore` 里，不随仓库发布。
 
 ## 许可
 

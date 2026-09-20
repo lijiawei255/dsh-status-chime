@@ -8,6 +8,18 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **English spoken alerts.** All eight scenes now ship in Chinese and English in the
+  same package, selected with the `language` setting or `/voice-alerts lang <zh|en>`.
+  Chinese remains the default.
+- The English lines are **written for English, not translated**. A literal rendering
+  of the Chinese runs long and flat, and clip length is the only channel this plugin
+  has for conveying urgency, so the English set was rewritten to preserve it. English
+  durations run 1.92s to 7.90s, monotonic in the same severity order as the Chinese,
+  with the three urgency bands separated by wide margins (38% into the failed/blocked
+  band) while clips inside a band sit close by design.
+- English uses a native English voice (`loongmary`, warm British) rather than the
+  Chinese voice reading English, which was auditioned and ranked last of three for
+  sounding noticeably synthetic.
 - **Silence floors in the quality gate.** The peak check only looked for clipping, so a clip
   of pure silence with a plausible length passed every gate — one of the classic TTS failure
   modes. Peak must now be >= -30 dB and mean >= -35 dB. Measured: shipped clips peak at
@@ -26,29 +38,6 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The quality gate is language-aware and checks every declared language, instead of one flat
-  scene list that only ever looked for `<scene>.mp3`.
-- `qa.mjs` now takes `--lang <code>`, and reports speech time, units/s and UTMOS in its
-  table. `VOICE_ALERTS_UTMOS_PYTHON` selects the interpreter that has `utmos-pytorch`.
-
-- **English spoken alerts.** All eight scenes now ship in Chinese and English in the
-  same package, selected with the `language` setting or `/voice-alerts lang <zh|en>`.
-  Chinese remains the default.
-- The English lines are **written for English, not translated**. A literal rendering
-  of the Chinese runs long and flat, and clip length is the only channel this plugin
-  has for conveying urgency, so the English set was rewritten to preserve it. English
-  durations run 1.92s to 7.90s, monotonic in the same severity order as the Chinese,
-  with every adjacent pair at least 22% apart.
-- English uses a native English voice (`loongmary`, warm British) rather than the
-  Chinese voice reading English, which was auditioned and ranked last of three for
-  sounding noticeably synthetic.
-- `build.mjs` and `qa.mjs` understand languages: `--lang <code>` restricts either to
-  one language, and `audition` picks the audition line for the candidate's language.
-- `/voice-alerts status` reports clip availability per language, so a missing English
-  set is visible rather than showing up as unexplained silence.
-
-### Changed
-
 - **Renamed from `dsh-voice-alerts` to `dsh-status-chime`.** The old name sat one letter
   away from an unrelated plugin already listed in the community catalog
   (`dsh-voice-alert`), and the marketplace hides one of two same-named packages, so the
@@ -62,6 +51,14 @@ uses [Semantic Versioning](https://semver.org/).
   hand-placed user override keep working untouched.
 - An unrecognised `language` value falls back to the default rather than resolving no
   clips at all — a typo should not be indistinguishable from a broken install.
+- `build.mjs` and `qa.mjs` understand languages: `--lang <code>` restricts either to
+  one language, and `audition` picks the audition line for the candidate's language.
+- `/voice-alerts status` reports clip availability per language, so a missing English
+  set is visible rather than showing up as unexplained silence.
+- The quality gate is language-aware and checks every declared language, instead of one flat
+  scene list that only ever looked for `<scene>.mp3`.
+- `qa.mjs` now takes `--lang <code>`, and reports speech time, units/s and UTMOS in its
+  table. `VOICE_ALERTS_UTMOS_PYTHON` selects the interpreter that has `utmos-pytorch`.
 
 ## [0.2.0] — 2026-09-21
 
@@ -148,3 +145,5 @@ First public release.
 - The spoken lines are Chinese. The plugin and its documentation are bilingual, but the
   audio is not; generating another language is a `clips.json` change plus
   `scripts/build.mjs build`.
+  **Superseded in 0.3.0**, which ships both languages. Kept here because it was true for
+  this release.

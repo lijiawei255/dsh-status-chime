@@ -26,18 +26,30 @@ Install it and it works. There is nothing to configure.
 
 ## The eight scenes
 
-The durations are **deliberate**: **long = something needs you, short = something ended**. So even without looking at the screen, the length of the clip alone tells you whether to drop what you are doing.
+The durations are **deliberate**: **long = something needs you, short = something ended**.
 
-| Scene | Fires when | Length | Role |
-|---|---|---|---|
-| `turn-error` | The turn failed, or hit the token ceiling | **7.97s** | longest |
-| `job-failed` | A background job failed | 5.95s | long |
-| `goal-blocked` | A goal is blocked and needs you | 4.78s | medium-long |
-| `approval` | An action is waiting for your approval | 3.00s | short |
-| `job-done` | A background job finished | 2.59s | medium |
-| `goal-complete` | The goal finished (once, not per round) | 2.16s | short |
-| `needs-input` | The agent stopped to ask you something | 2.09s | short |
-| `turn-done` | A turn you started finished normally | 1.58s | shortest |
+More precisely it is **three bands**, not "each clip a notch longer than the next":
+
+| Band | Range | Scenes |
+|---|---|---|
+| Failed / blocked — needs you most | 4.8 – 8.0s | `turn-error`, `job-failed`, `goal-blocked` |
+| Waiting for you to act | 3.0s | `approval` |
+| Ended (or a simple question) | 1.6 – 2.6s | `job-done`, `goal-complete`, `needs-input`, `turn-done` |
+
+**Clips inside a band sit deliberately close**, because they are the same urgency: `goal-complete` (2.16s) and `needs-input` (2.09s) differ by **0.07s**, and the Chinese set differs by 0.07s too. **Length tells you the band, not which clip.**
+
+| Scene | Fires when | Chinese | English | Urgency |
+|---|---|---|---|---|
+| `turn-error` | The turn failed, or hit the token ceiling | **7.97s** | 7.90s | failed/blocked — longest |
+| `job-failed` | A background job failed | 5.95s | 6.46s | failed/blocked |
+| `goal-blocked` | A goal is blocked and needs you | 4.78s | 4.85s | failed/blocked |
+| `approval` | An action is waiting for your approval | 3.00s | 3.00s | waiting for you |
+| `job-done` | A background job finished | 2.59s | 2.59s | ended |
+| `goal-complete` | The goal finished (once, not per round) | 2.16s | 2.16s | ended |
+| `needs-input` | The agent stopped to ask you something | 2.09s | 2.09s | a quick question |
+| `turn-done` | A turn you started finished normally | 1.58s | 1.92s | ended — shortest |
+
+⚠️ **The two sets have different durations — do not mix them up.** The Chinese and English clips are synthesized separately (different voice, different language), so the order matches but the numbers do not: English `job-failed` is **6.46s** against the Chinese **5.95s**. Both columns are given above; read the one for the language you actually use.
 
 Two **filtering rules** deserve a note, because they are what keeps this plugin from becoming a source of noise:
 
@@ -81,17 +93,40 @@ A literal translation of the Chinese runs long and flat in English, and **clip l
 | `job-failed` | 后台任务失败，请回到 DSH 查看详情。 | The background job failed, and it needs your attention. Check DSH for details. |
 | `turn-error` | 任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。 | The turn failed, so this round did not finish. Open DSH to see the error details, then try again. |
 
-The English durations run **1.92s → 7.90s**, monotonic in the same severity order as the Chinese, with **every adjacent pair at least 22% apart**, so urgency is still readable from length alone in English.
+The English durations run **1.92s → 7.90s**, monotonic in the same severity order as the Chinese. What the length actually separates is the **three urgency bands**: the step into the failed/blocked band is **38%** (3.00s → 4.85s). **Within a band the clips sit close on purpose** — `goal-complete` (2.16s) against `needs-input` (2.09s) is **0.072s**, and the Chinese set has the same near-tie. Length tells you the band, not which clip.
 
-> ⚠️ One trap worth recording: the English `turn-error` started at 16 words / 6.55s while `job-failed` was 6.46s — a 0.10s gap, **inaudible**. The Chinese pair differs by 2.02s (34%). Lengthening the English error line to 19 words restored a 1.44s gap. **If you edit the copy, re-measure the durations** rather than trusting the word count.
+> ⚠️ One trap worth recording: the English `turn-error` started at 16 words / 6.55s while `job-failed` was 6.46s — a 0.10s gap, **inaudible**. The Chinese pair differs by 2.02s (**25%** of the longer clip; every percentage in this file uses that convention). Lengthening the English error line to 19 words restored a 1.44s gap. **If you edit the copy, re-measure the durations** rather than trusting the word count.
 
-The English set uses `loongmary` (a warm British voice) rather than having the Chinese voice read English. Three candidates were auditioned and ranked; the Chinese voice reading English was described as noticeably synthetic with unnatural rhythm (naturalness 5/10) and placed last in two independent ranking runs.
+The English set uses `loongmary` (a warm British voice) rather than having the Chinese voice read English. Three candidates were auditioned and ranked (`scripts/qa.mjs rank`; the output lands in `qa/`, which is not version-controlled — a repeat run kept the same order). The Chinese voice reading English scored lowest and was described as noticeably synthetic with unnatural rhythm: **naturalness 4/10, character 5/10** (the two are easy to mix up — `naturalness` is 4, `character` is 5).
 
 `/voice-alerts status` lists each language's clip availability:
 
 ```
 Clip sets: zh (active): all clips present  |  en: all clips present
 ```
+
+## Three things to know first
+
+1. **Platform: Windows 10/11.** The guaranteed player is Windows' own PowerShell + `System.Media.SoundPlayer`; there is **no macOS or Linux support**. With ffmpeg installed it prefers `ffplay`, but that is an optional upgrade.
+2. **You need DSH Desktop** and a terminal that can run `dsh`. Installing a plugin goes through `dsh plugin`, which shells out to **pnpm** (see the trap below).
+3. **The audio needs nothing installed** — all 32 clips, both languages, ship in the package.
+
+### ⚠️ Read once: the package name and the runtime name differ
+
+This is the easiest thing to trip over, so it is worth stating plainly:
+
+| | Name |
+|---|---|
+| **npm package / GitHub repo** | `dsh-status-chime` |
+| **Slash command** | `/voice-alerts` |
+| **Log prefix** | `[voice-alerts]` |
+| **Config file** | `$DSH_HOME/voice-alerts/voice-alerts.config.json` |
+| **Clip directory** | `$DSH_HOME/voice-alerts/clips/` |
+| **cordis id** | `voice-alerts` |
+
+**The package was renamed from `dsh-voice-alerts` to `dsh-status-chime` in 0.3.0** (the old name differed by one letter from an unrelated plugin in the community catalog, which the marketplace rules would have hidden). The rename touches **only the package and repository names**: the command, config paths and log prefix are all still `voice-alerts`, so an existing install keeps working.
+
+**When debugging, grep the log for `voice-alerts`, not `dsh-status-chime`.**
 
 ## Install
 
@@ -105,16 +140,26 @@ The repository includes [INSTALL.md](INSTALL.md), which spells out every step. I
 
 ### Option 2: run the commands yourself
 
+Replace `<PROFILE>` with your own profile name (usually `desktop`). **Look at what is actually under `$DSH_HOME/profiles/` first** rather than copying someone else's:
+
 ```powershell
 # straight from GitHub
-dsh plugin --profile desktop add github:lijiawei255/dsh-status-chime
+dsh plugin --profile <PROFILE> add github:lijiawei255/dsh-status-chime
 
 # or clone / download a ZIP first, then point at the local directory
 git clone https://github.com/lijiawei255/dsh-status-chime
-dsh plugin --profile desktop add .\dsh-status-chime
+dsh plugin --profile <PROFILE> add .\dsh-status-chime
 ```
 
 This installs the package into the profile and registers it as a profile layer (which works because the package declares `dsh.bundle`; this repository already does).
+
+**⚠️ If you hit `ERR_PNPM_ADDING_TO_ROOT`**: the profile carries its own `pnpm-workspace.yaml` declaring `packages: [.]`, so pnpm 9 refuses a plain `add`. Add `-w`:
+
+```powershell
+dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
+```
+
+Upgrading to pnpm 10 or newer also avoids it. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 11.
 
 **You must fully restart DSH Desktop afterwards**, otherwise the plugin is not loaded.
 
@@ -126,11 +171,19 @@ In the chat box, run:
 /voice-alerts status
 ```
 
-If you see `Voice alerts: on (v0.3.0)` and `Scenes (8)`, the install worked. To hear all eight:
+If you see `Voice alerts: on (v0.3.0)`, `Language: zh` and `Scenes (8)`, the install worked. To hear all eight:
 
 ```
 /voice-alerts
 ```
+
+### Uninstall
+
+```powershell
+dsh plugin --profile <PROFILE> remove dsh-status-chime
+```
+
+Uninstalling does **not** delete `$DSH_HOME/voice-alerts/` — your config, clips and QA reports live there. Delete that directory by hand to remove everything. A **full DSH Desktop restart** is needed for the removal to take effect.
 
 ## How it works
 
@@ -146,8 +199,8 @@ DSH events  ──▶  lib/index.js  ──▶  coalesce / throttle / priority  
 | `session/event` → `goal/change` | Goal `complete` and `block` |
 | `jobs.onJobDone` | Background job `completed` and `failed` |
 | `tools/pre-execute` | A tool name in `waitingTools` means the agent is about to wait for you |
-| `session/event` → `approval/asked` | An approval request raised under the `ask` policy |
-| `approval/request` | Fallback path for the same event (also `ask` only) |
+| `session/event` → `approval/asked` | **Primary path**: always emitted when the approval policy is `ask` |
+| `approval/request` | **Fallback**: the scoped waterfall, also only under `ask`; both play the same clip |
 
 **Playback rules**: several events inside one 400 ms window collapse to the **highest-priority** scene only; the same scene will not repeat within 1.5 s; a new alert interrupts the one playing.
 
@@ -166,7 +219,7 @@ Three concrete pieces:
 `tools/qw_local_omni.py` hands **several candidate clips at once** to Qwen-Omni and asks for a cross-comparison with per-dimension scores:
 
 ```powershell
-python tools/qw_local_omni.py preview/a.mp3 preview/b.mp3 preview/c.mp3 `
+python tools/qw_local_omni.py preview/en-loongmary.mp3 preview/en-loongeva_v3.6.mp3 preview/en-longanyuanfei.mp3 `
   --message "Compare these recordings against each other: rate clarity, naturalness, voice character and cleanliness, and rank them."
 ```
 
@@ -182,18 +235,18 @@ Sounding pleasant is not enough — TTS can swallow syllables, mispronounce, or 
 python tools/qw_local_asr.py assets/clips/turn-error.mp3 --lang zh
 ```
 
-This one is a legitimate **hard gate**, because it is mechanically decidable: the intended text is known, and the transcript either matches or it does not. All eight clips in this project score **1.000**.
+This one is a legitimate **hard gate**, because it is mechanically decidable: the intended text is known, and the transcript either matches or it does not. All 16 clips in this project (8 scenes in each of 2 languages) score **1.000**.
 
 **3. Duration as an information channel**
 
 The durations in the table above are not arbitrary. Severity is encoded in the audio itself: **long = something needs you**. That way, even with the phone beside you and the screen out of view, the length alone tells you whether to put down what you are holding.
 
-**The resulting workflow** (three scripts, fully reproducible):
+**The resulting workflow** (two scripts, fully reproducible):
 
 ```
 scripts/build.mjs audition    produce several candidate voices
       ↓
-scripts/qa.mjs rank           cross-ranking by the omni model + ASR read-back
+scripts/qa.mjs rank           cross-ranking by the omni model (no ASR; that happens next)
       ↓
 a human listens to the top 2-3 and decides    ← decision load compressed to very little
       ↓
@@ -208,7 +261,7 @@ scripts/qa.mjs clips          quality gate over everything
 
 | Check | Tier | Why it exists |
 |---|---|---|
-| **Silence floors** (peak >= -30 dB, mean >= -35 dB) | hard gate | The peak check only looked for **clipping**, so a clip with a plausible length and **no signal at all** passed every gate — one of the classic TTS failure modes. Measured on the shipped clips: peak -4.2..-1.9 dB, mean -20.6..-16.6 dB, against -91 dB for true silence. Both floors clear the real range by more than 25 dB |
+| **Silence floors** (peak >= -30 dB, mean >= -35 dB) | hard gate | The peak check only looked for **clipping**, so a clip with a plausible length and **no signal at all** passed every gate — one of the classic TTS failure modes. Measured on the shipped clips: peak -4.2..-1.9 dB, mean -20.6..-16.6 dB, against -91 dB for true silence. **The two margins are not equal**: the peak floor clears the worst shipped clip by **25.8 dB** (-4.2 against -30), the mean floor by **14.4 dB** (-20.6 against -35) |
 | **Net speech rate** (units per second of actual speech) | advisory | The Chinese set speaks **deliberately slowly** (rate 0.95), so the 3.2-5.5 units/s band from human broadcast-speech research would fail **seven of the eight**. What matters here is consistency between clips, because length carries the urgency, so each clip is compared against the **median of its own language**. Clips under 5 units are exempt, or a two-word clip would false-positive |
 | **UTMOS** (a trained MOS predictor) | advisory | Gives naturalness a **reproducible** number, which is the gap the unreliable model score left. It must be compared **per language**: it scores every English clip **above** every Chinese one (4.38-4.51 against 3.75-4.28), so a cross-language comparison would read as a defect in the Chinese set |
 
@@ -232,6 +285,9 @@ Full template: [`assets/voice-alerts.config.json`](assets/voice-alerts.config.js
 | `interrupt` | `true` | Whether a new alert cuts off the current one |
 | `scenes.<scene>.enabled` | `true` | Turn a single scene off |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
+| `ffplayPath` | `null` | Explicit ffplay path, for when it is not on PATH |
+| `playPs1Path` | `null` | Explicit path to the fallback script `play.ps1` |
+| `commandName` | `"voice-alerts"` | Slash command name. A collision with another plugin loses only the command, not the alerts |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | A match means "waiting for you"; override if DSH renames a tool |
 | `language` | `"zh"` | Spoken language: `zh` / `en`. An unrecognised value falls back to `zh` rather than going silent |
 | `watchApprovals` | `true` | Whether an approval request is spoken (only reachable under the `ask` policy) |
@@ -267,6 +323,15 @@ Each clip is produced as both `mp3` and `wav`. **Do not delete the wav files**: 
 
 Audio you generate into `$DSH_HOME/voice-alerts/clips/` automatically takes precedence over the packaged files, per file, so you can replace just one scene.
 
+**The filename rule matters** if you want to replace a single English clip:
+
+| Language | Filename |
+|---|---|
+| Chinese (default) | `<scene>.mp3` / `.wav`, e.g. `turn-done.mp3` |
+| English | `<scene>.en.mp3` / `.en.wav`, e.g. `turn-done.en.mp3` |
+
+**The default language keeps the bare name; every other language adds a `.<code>` infix.** So to replace only the English `approval`, drop in `approval.en.mp3` (and `.wav` if you rely on the PowerShell fallback player).
+
 ## No sound?
 
 Work through this order; it covers the overwhelming majority of cases. The full list is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
@@ -276,7 +341,7 @@ Work through this order; it covers the overwhelming majority of cases. The full 
 3. **The Windows volume mixer has `ffplay` (or `powershell.exe`) muted on its own** — this is the most common cause. Right-click the taskbar volume icon → Open Volume Mixer, and check the matching entry.
 4. The wrong output device is selected.
 5. That scene is disabled, or `enabled` is `false`.
-6. The log says `no audio for <scene>` → the clip file is missing.
+6. The log says `no <lang> audio for <scene>` (e.g. `no zh audio for turn-done`) → that language's clip file is missing.
 7. The log says `throttled <scene>` → the repeat-suppression window caught it. That is expected behaviour.
 
 Log location: `%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log`; search for `voice-alerts`.
@@ -345,7 +410,7 @@ path, which usually pinpoints the cause immediately.
 | Layer | Status |
 |---|---|
 | **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
-| **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the quality gate (ASR similarity 1.000, all dimensions met, no clipping) and were individually confirmed by ear to play through completely |
+| **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the automated quality gate (ASR similarity 1.000, clarity and cleanliness 10/10, no clipping). The **Chinese** set was additionally confirmed by ear, clip by clip, to play through completely; **the English set has not had that listening pass** — it passed the automated gate only |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
 | **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **50 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, and language switching with its fallback |
 | **Language** | Chinese is the default; after `lang en` the plugin genuinely resolves the English **file** (the test asserts on the resolved filename, not just the status text); an unrecognised language in the config falls back to Chinese instead of going silent |
@@ -375,18 +440,33 @@ The scene is **kept** (it does work for tool-task failures), but its trigger **h
 ```
 dsh-status-chime/
 ├── lib/index.js                  # the plugin; the only runtime code
+├── cordis.patch.yml              # registers this package as a profile layer (dsh.bundle points here)
+├── package.json                  # name, dsh.bundle declaration, engines
 ├── assets/
-│   ├── clips/                    # 8 scenes x 2 languages = 16 clips, each as mp3 + wav
+│   ├── clips/                    # 8 scenes x 2 languages = 16 clips, mp3 + wav each (32 files)
 │   ├── clips.json                # single source of truth for lines, voice and settings
 │   ├── voice-alerts.config.json  # config template
 │   └── play.ps1                  # PowerShell fallback player (pure ASCII; see the file header)
-├── tools/                        # Bailian local-audio helpers (ASR / Omni)
-├── scripts/                      # build / qa / selftest / privacy scan
+├── tools/                        # Bailian local-audio helpers (ASR / Omni / UTMOS)
+├── scripts/                      # build / qa / selftest / negative control / privacy scan
+│   ├── build.mjs                 # synthesise clips (takes --lang)
+│   ├── qa.mjs                    # quality gate (takes --lang)
+│   ├── selftest.mjs              # offline logic suite, 50 checks
+│   ├── qa-negative-control.mjs   # proves the gate actually rejects bad audio
+│   ├── verify-local-install.mjs  # verifies an installed single-file copy
+│   ├── scan-sensitive.mjs        # privacy / wording scan
+│   └── scan-sensitive.verify.mjs # proves the scanner actually catches things
 ├── docs/verification.md          # the per-item verification record
+├── .github/workflows/verify.yml  # CI: install + suite + scan on a clean Windows runner
 ├── INSTALL.md                    # install steps written for an agent
 ├── TROUBLESHOOTING.md            # what to do when there is no sound
-└── CHANGELOG.md
+├── README.md                     # Chinese README
+├── CHANGELOG.md
+└── LICENSE                       # MIT
 ```
+
+`qa/`, `preview/` and `tmp/` are scratch directories the scripts write; they are in
+`.gitignore` and are not part of the package.
 
 ## License
 

@@ -51,6 +51,24 @@ git clone https://github.com/lijiawei255/dsh-status-chime
 dsh plugin --profile <PROFILE> add .\dsh-status-chime
 ```
 
+**⚠️ Expected failure mode — do not mistake it for a problem with this package.** A DSH
+profile carries its own `pnpm-workspace.yaml` declaring `packages: [.]`, so pnpm 9 rejects a
+plain `add` with:
+
+```
+ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace
+root … make it explicit by running this command again with the -w flag
+```
+
+Add `-w` and retry (measured: pnpm 9 fails, pnpm 11.8.0 works without it, pnpm 10 untested):
+
+```powershell
+dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
+```
+
+The same command fails for any package, so it is a pnpm/DSH interaction rather than a defect
+in this one. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 11.
+
 **Verify the install registered the bundle**, because this is where a silent failure
 happens. Read `<PROFILE>/package.json` and confirm that:
 - `dependencies` contains `dsh-status-chime`
