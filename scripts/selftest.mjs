@@ -22,7 +22,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,7 +68,7 @@ function findFfmpeg() {
 function makeSilentClips() {
   const ffmpeg = findFfmpeg();
   if (ffmpeg === null) return false;
-  for (const scene of SCENE_NAMES) {
+  for (const scene of [...SCENE_NAMES, ...SCENE_NAMES.map((s) => `${s}.en`)]) {
     for (const [extension, codec] of [['mp3', ['-b:a', '128k']], ['wav', ['-c:a', 'pcm_s16le']]]) {
       const out = join(SILENT_CLIPS, `${scene}.${extension}`);
       const result = spawnSync(ffmpeg, [
@@ -193,7 +193,7 @@ function markNow() { return { info: infoLogs.length, warn: warnLogs.length }; }
  */
 function chosenSinceMark(mark) {
   return infoLogs.slice(mark.info).concat(warnLogs.slice(mark.warn))
-    .map((l) => /(?:playing|no audio for)\s+([a-z-]+)/.exec(l)?.[1])
+    .map((l) => /(?:playing|no [a-z]{2} audio for)\s+([a-z-]+)/.exec(l)?.[1])
     .filter(Boolean);
 }
 
@@ -209,6 +209,11 @@ function playedSinceMark(mark) {
 
 function sawSinceMark(mark, fragment) {
   return infoLogs.slice(mark.info).concat(warnLogs.slice(mark.warn)).some((l) => l.includes(fragment));
+}
+
+/** Everything logged since the mark, for failure reporting. */
+function logSinceMark(mark) {
+  return infoLogs.slice(mark.info).concat(warnLogs.slice(mark.warn));
 }
 
 if (!existsSync(PLUGIN)) {
@@ -426,6 +431,61 @@ check('/voice-alerts test goal-blocked selects that scene',
 
 const bad = await commandDef.handler({ rawInput: 'test no-such-scene' });
 check('/voice-alerts test rejects an unknown scene', bad.kind === 'error' && bad.text.includes('Unknown scene'));
+
+// ── language switching ───────────────────────────────────────────────────
+// Asserting on the file that actually resolves is what proves the selection
+// took effect; the status line alone would not catch a wrong filename.
+const langDefault = await commandDef.handler({ rawInput: 'lang' });
+check('/voice-alerts lang reports the default language as zh',
+  langDefault.kind === 'success' && /Language: zh\b/.test(langDefault.text),
+  langDefault.text.split('\n')[0]);
+
+const toEn = await commandDef.handler({ rawInput: 'lang en' });
+const persisted = JSON.parse(readFileSync(join(SANDBOX, 'voice-alerts.config.json'), 'utf8')).language;
+check('/voice-alerts lang en switches and persists the setting',
+  toEn.kind === 'success' && persisted === 'en',
+  `persisted=${persisted}`);
+
+await sleep(60);
+const statusEn = await commandDef.handler({ rawInput: 'status' });
+check('/voice-alerts status names the active language and both clip sets',
+  statusEn.text.includes('Language: en') && statusEn.text.includes('Clip sets:'),
+  (statusEn.text.split('\n')[1] ?? '').trim());
+
+// With en active, every English clip must resolve.
+//
+// The "missing English clip" branch is deliberately NOT exercised here: the
+// repository ships a complete English set and PACKAGE_ASSETS is the last link in
+// the resolution chain, so deleting a sandbox copy is always rescued by the
+// packaged one — which is correct behaviour. Forcing the branch would mean
+// renaming shipped assets mid-test, a worse trade than the gap it would close.
+// The missing-clip warning path itself is covered by the backend checks below.
+const statusEnFull = await commandDef.handler({ rawInput: 'status' });
+check('with en active, the whole English clip set resolves',
+  statusEnFull.text.includes('en (active): all clips present'),
+  (statusEnFull.text.split('\n').find((l) => l.startsWith('Clip sets')) ?? '(none)').trim());
+
+mark = markNow();
+await commandDef.handler({ rawInput: 'test turn-done' });
+await sleep(QUIET);
+check('with en active, playing still selects a clip rather than going silent',
+  playedSinceMark(mark).includes('turn-done'),
+  playedSinceMark(mark).join(',') || logSinceMark(mark).slice(-1)[0] || '(no log)');
+
+const badLang = await commandDef.handler({ rawInput: 'lang klingon' });
+check('/voice-alerts lang rejects an unknown language',
+  badLang.kind === 'error' && badLang.text.includes('Unknown language'));
+
+// An unknown value in the config must fall back, not silence the plugin.
+rewriteSandboxConfig({ language: 'klingon' });
+await sleep(60);
+const statusFallback = await commandDef.handler({ rawInput: 'status' });
+check('an unrecognised language in the config falls back to zh rather than muting',
+  statusFallback.text.includes('Language: zh'),
+  (statusFallback.text.split('\n')[1] ?? '').trim());
+
+rewriteSandboxConfig({ language: 'zh' });
+await sleep(60);
 
 const off = await commandDef.handler({ rawInput: 'off' });
 await sleep(80);
