@@ -32,6 +32,9 @@
   "_commandNameNote": "Slash command name. A collision with another plugin loses only the command, not the alerts.",
   "commandName": "voice-alerts",
 
+  "_languageNote": "Which spoken language to use: 'zh' (default) or 'en'. Both sets ship in the package. An unrecognised value falls back to 'zh' rather than going silent. Switch at runtime with /voice-alerts lang <zh|en>.",
+  "language": "zh",
+
   "_waitingToolsNote": "Tool names that mean the agent is about to wait for you; they play the needs-input clip.",
   "waitingTools": [
     "ask_user_question",

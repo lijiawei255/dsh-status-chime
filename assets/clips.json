@@ -11,7 +11,6 @@
     "Voice: a mature, composed female voice at a measured pace, delivered calmly rather than",
     "performed. Only the voice carries character; the wording stays neutral."
   ],
-
   "model": "qwen-audio-3.0-tts-flash",
   "voice": "longanyuanfei",
   "chosenCandidate": "flash-yuanfei-expressive",
@@ -20,7 +19,6 @@
     "Run `node scripts/build.mjs voices` to list the candidates below, and",
     "`bl speech synthesize --list-voices --model <model>` for the full catalogue."
   ],
-
   "_candidateNote": [
     "Starting points for an audition. Each entry may override instruction/rate/pitch.",
     "Only the voices available for the chosen model can actually be used; check the",
@@ -51,67 +49,153 @@
       "model": "qwen-audio-3.0-tts-plus",
       "voice": "longanlingxin",
       "label": "warmer voice from the plus model family"
+    },
+    {
+      "id": "flash-mary-en",
+      "language": "en",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "loongmary",
+      "label": "warm British female (the shipped English choice)"
+    },
+    {
+      "id": "flash-eva-en",
+      "language": "en",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "loongeva_v3.6",
+      "label": "elegant female, reads slightly more measured"
+    },
+    {
+      "id": "flash-yuanfei-en",
+      "language": "en",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "longanyuanfei",
+      "label": "the Chinese voice reading English (kept for reference; ranked last)"
     }
   ],
-
   "instruction": "A mature, composed adult female voice with a slightly hushed, close-mic quality. Steady delivery at a noticeably unhurried pace, phrases easing off gently at the end. Calm and self-assured. Not girlish, not exaggerated, and not flat or mechanical.",
   "rate": 0.95,
-  "pitch": 1.0,
+  "pitch": 1,
   "volume": 60,
   "format": "mp3",
   "sampleRate": 24000,
   "language": "zh",
-
+  "defaultLanguage": "zh",
+  "_languagesNote": [
+    "Per-language overrides. The model/voice/instruction/rate/pitch above describe the",
+    "default language; an entry here replaces whichever fields it names and inherits the",
+    "rest. Clips for a non-default language are written as <scene>.<lang>.mp3 / .wav, so",
+    "the default language keeps the plain <scene>.mp3 name it has always had."
+  ],
+  "languages": {
+    "en": {
+      "language": "en",
+      "voice": "loongmary",
+      "_voiceWhy": [
+        "A native English voice rather than the Chinese voice reading English. Auditioned",
+        "against loongeva and against longanyuanfei; two independent ranking runs both put",
+        "loongmary first and longanyuanfei last, the latter described as noticeably synthetic",
+        "with unnatural rhythm. Absolute scores drifted between the runs while the ordering",
+        "held, which is the reliable part of a model-judged ranking."
+      ],
+      "instruction": "A mature, composed adult female voice with a warm, natural delivery. Steady pace at a measured, unhurried speed, with clear consonants and gentle sentence endings. Calm and self-assured. Not girlish, not exaggerated, and not flat or mechanical."
+    }
+  },
   "_consistencyNote": [
     "The clips shipped in assets/clips were generated with an equivalent style instruction.",
     "TTS output is stochastic, so regenerating will not reproduce the shipped files byte for",
     "byte even with identical settings; it lands in the same style range, nothing more."
   ],
-
   "auditionText": "任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。",
-
-  "loudnorm": { "I": -16, "TP": -1.5, "LRA": 11 },
-
+  "loudnorm": {
+    "I": -16,
+    "TP": -1.5,
+    "LRA": 11
+  },
   "clips": {
     "turn-done": {
       "text": "任务完成。",
       "expect": "任务完成",
-      "length": "short"
+      "length": "short",
+      "en": {
+        "text": "Turn complete.",
+        "expect": "turn complete",
+        "length": "short"
+      }
     },
     "turn-error": {
       "text": "任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。",
       "expect": "任务执行出错本轮未能完成请回到 DSH 查看错误详情",
-      "length": "long"
+      "length": "long",
+      "en": {
+        "text": "The turn failed, so this round did not finish. Open DSH to see the error details, then try again.",
+        "expect": "the turn failed so this round did not finish open dsh to see the error details then try again",
+        "length": "long"
+      }
     },
     "needs-input": {
       "text": "需要你回答。",
       "expect": "需要你回答",
-      "length": "short"
+      "length": "short",
+      "en": {
+        "text": "Waiting for your answer.",
+        "expect": "waiting for your answer",
+        "length": "short"
+      }
     },
     "job-done": {
       "text": "后台任务完成。",
       "expect": "后台任务完成",
-      "length": "short"
+      "length": "short",
+      "en": {
+        "text": "The background job has finished.",
+        "expect": "the background job has finished",
+        "length": "short"
+      }
     },
     "job-failed": {
       "text": "后台任务失败，请回到 DSH 查看详情。",
       "expect": "后台任务失败请回到 DSH 查看详情",
-      "length": "mid"
+      "length": "mid",
+      "en": {
+        "text": "The background job failed, and it needs your attention. Check DSH for details.",
+        "expect": "the background job failed and it needs your attention check dsh for details",
+        "length": "mid"
+      }
     },
     "goal-complete": {
       "text": "目标已完成。",
       "expect": "目标已完成",
-      "length": "short"
+      "length": "short",
+      "en": {
+        "text": "The goal is complete.",
+        "expect": "the goal is complete",
+        "length": "short"
+      }
     },
     "goal-blocked": {
       "text": "目标受阻，需要你介入处理后才能继续。",
       "expect": "目标受阻需要你介入处理后才能继续",
-      "length": "mid"
+      "length": "mid",
+      "en": {
+        "text": "The goal is blocked. It needs you before it can continue.",
+        "expect": "the goal is blocked it needs you before it can continue",
+        "length": "mid"
+      }
     },
     "approval": {
       "text": "有操作等待你批准。",
       "expect": "有操作等待你批准",
-      "length": "short"
+      "length": "short",
+      "en": {
+        "text": "An action is waiting for your approval.",
+        "expect": "an action is waiting for your approval",
+        "length": "short"
+      }
     }
-  }
+  },
+  "auditionTexts": {
+    "zh": "任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。",
+    "en": "An action is waiting for your approval."
+  },
+  "chosenCandidateEn": "flash-mary-en"
 }
