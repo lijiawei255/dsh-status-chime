@@ -83,12 +83,21 @@ const mode = args[0] ?? null;
 const dryRun = args.includes('--dry-run');
 
 /**
- * First non-flag argument after the subcommand.
- * Flags have to be filtered out: `build --dry-run` otherwise reads "--dry-run" as a
- * scene name.
+ * First positional argument after the subcommand.
+ *
+ * Flags are filtered out, and so is the value of any flag that takes one:
+ * `build --lang en` would otherwise read "en" as a scene name and fail with
+ * "no such scene: en". A flag that takes a value has to be declared here.
  */
+const VALUE_FLAGS = new Set(['--lang', '--root']);
 function positional(index) {
-  const rest = args.slice(1).filter((a) => !a.startsWith('--'));
+  const rest = [];
+  for (let i = 1; i < args.length; i += 1) {
+    const a = args[i];
+    if (VALUE_FLAGS.has(a)) { i += 1; continue; } // skip the flag and its value
+    if (a.startsWith('--')) continue;             // boolean flag
+    rest.push(a);
+  }
   return rest[index];
 }
 
@@ -102,6 +111,80 @@ for (const dir of [TMP_DIR, PREVIEW_DIR, CLIPS_DIR]) mkdirSync(dir, { recursive:
 
 if (!existsSync(CLIPS_JSON)) fail(`missing source of truth: ${CLIPS_JSON}`);
 const config = JSON.parse(readFileSync(CLIPS_JSON, 'utf8'));
+
+// ── language layer ────────────────────────────────────────────────────────
+// The top-level model/voice/instruction/rate/pitch describe the default
+// language. `languages.<code>` overrides whichever fields it names, and clips
+// for a non-default language are written as `<scene>.<code>.mp3` so the
+// default language keeps the plain `<scene>.mp3` name it has always had.
+const DEFAULT_LANGUAGE = config.defaultLanguage ?? 'zh';
+
+/** Languages to render, default first, then every override that is not it. */
+function allLanguages() {
+  const overrides = Object.keys(config.languages ?? {}).filter((code) => code !== DEFAULT_LANGUAGE);
+  return [DEFAULT_LANGUAGE, ...overrides];
+}
+
+/** Effective synthesis settings for one language. */
+function settingsFor(language) {
+  const o = config.languages?.[language] ?? {};
+  return {
+    model: o.model ?? config.model,
+    voice: o.voice ?? config.voice,
+    instruction: o.instruction ?? config.instruction,
+    rate: o.rate ?? config.rate,
+    pitch: o.pitch ?? config.pitch,
+    volume: o.volume ?? config.volume,
+    format: o.format ?? config.format,
+    sampleRate: o.sampleRate ?? config.sampleRate,
+    language: o.language ?? language,
+  };
+}
+
+/** Filename stem for a scene in a language. */
+function clipBase(scene, language) {
+  return language === DEFAULT_LANGUAGE ? scene : `${scene}.${language}`;
+}
+
+/** The spoken line for a scene in a language, or null when there is no copy. */
+function textFor(scene, language) {
+  const spec = config.clips[scene];
+  if (spec === undefined) return null;
+  if (language === DEFAULT_LANGUAGE) return spec.text ?? null;
+  return spec[language]?.text ?? null;
+}
+
+/** Audition line for a language. */
+function auditionTextFor(language) {
+  return config.auditionTexts?.[language] ?? (language === DEFAULT_LANGUAGE ? config.auditionText : null);
+}
+
+/** Synthesise + normalise one scene in one language. Returns the clip path or null. */
+function renderScene(ffmpeg, scene, language) {
+  const text = textFor(scene, language);
+  if (!text) {
+    log(`  - ${clipBase(scene, language)}: no ${language} copy, skipped`);
+    return null;
+  }
+  const s = settingsFor(language);
+  const base = clipBase(scene, language);
+  const raw = join(TMP_DIR, `${base}.raw.mp3`);
+  if (!synthesize({ id: base, model: s.model, voice: s.voice, text, instruction: s.instruction,
+    rate: s.rate, pitch: s.pitch, volume: s.volume, format: s.format, sampleRate: s.sampleRate,
+    language: s.language, out: raw })) {
+    log(`  ! synthesis failed: ${base}`);
+    return null;
+  }
+  const mp3 = join(CLIPS_DIR, `${base}.mp3`);
+  const wav = join(CLIPS_DIR, `${base}.wav`);
+  if (!normalize(ffmpeg, { raw, mp3, wav, loudnorm: config.loudnorm })) {
+    log(`  ! normalisation failed: ${base}`);
+    return null;
+  }
+  const seconds = ffprobeDuration(ffmpeg, mp3);
+  log(`  ok ${base.padEnd(18)} ${seconds === null ? '?' : seconds.toFixed(2) + 's'}  ${mp3}`);
+  return mp3;
+}
 
 // ── process helpers ───────────────────────────────────────────────────────
 function run(exe, argv, { quiet = false } = {}) {
@@ -184,9 +267,14 @@ function cmdVoices() {
   log(`Voice candidates (${candidates.length}):`);
   for (const candidate of candidates) {
     const chosen = config.chosenCandidate === candidate.id ? '  <- selected' : '';
-    log(`  ${String(candidate.id).padEnd(20)} ${String(candidate.model).padEnd(26)} ${String(candidate.voice).padEnd(18)} ${candidate.label}${chosen}`);
+    const lang = candidate.language ?? DEFAULT_LANGUAGE;
+    log(`  ${String(candidate.id).padEnd(20)} ${lang.padEnd(4)} ${String(candidate.model).padEnd(26)} ${String(candidate.voice).padEnd(18)} ${candidate.label}${chosen}`);
   }
-  log(`\nLocked in: model=${config.model ?? '(none)'}  voice=${config.voice ?? '(none)'}`);
+  log('');
+  for (const code of allLanguages()) {
+    const s = settingsFor(code);
+    log(`Locked in [${code}]: model=${s.model ?? '(none)'}  voice=${s.voice ?? '(none)'}`);
+  }
 }
 
 function cmdAudition(only) {
@@ -198,19 +286,25 @@ function cmdAudition(only) {
 
   const done = [];
   for (const candidate of list) {
+    // A candidate may declare its own language, so English voices are auditioned
+    // on English copy rather than on the Chinese audition line.
+    const lang = candidate.language ?? DEFAULT_LANGUAGE;
+    const text = candidate.text ?? auditionTextFor(lang);
+    if (!text) { log(`  ! no audition text for ${lang}; skipping ${candidate.id}`); continue; }
+    const s = settingsFor(lang);
     const raw = join(TMP_DIR, `${candidate.id}.raw.mp3`);
     const synthesized = synthesize({
       id: candidate.id,
       model: candidate.model,
       voice: candidate.voice,
-      text: config.auditionText,
-      instruction: candidate.instruction ?? config.instruction,
-      rate: candidate.rate ?? config.rate,
-      pitch: candidate.pitch ?? config.pitch,
-      volume: config.volume,
-      format: config.format,
-      sampleRate: config.sampleRate,
-      language: config.language,
+      text,
+      instruction: candidate.instruction ?? s.instruction,
+      rate: candidate.rate ?? s.rate,
+      pitch: candidate.pitch ?? s.pitch,
+      volume: s.volume,
+      format: s.format,
+      sampleRate: s.sampleRate,
+      language: s.language,
       out: raw,
     });
     if (!synthesized) continue;
@@ -221,7 +315,7 @@ function cmdAudition(only) {
       continue;
     }
     const seconds = ffprobeDuration(ffmpeg, mp3);
-    log(`  ok ${candidate.id}  ${seconds === null ? '?' : seconds.toFixed(2) + 's'}  ${mp3}`);
+    log(`  ok ${candidate.id}  ${lang}  ${seconds === null ? '?' : seconds.toFixed(2) + 's'}  ${mp3}`);
     done.push(candidate.id);
   }
   writeFileSync(join(PREVIEW_DIR, 'index.json'), `${JSON.stringify({
@@ -242,31 +336,21 @@ function cmdBuild(only) {
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) fail('ffmpeg not found; it is needed for loudness normalisation and transcoding.');
 
-  const names = only ? [only] : Object.keys(config.clips);
-  for (const scene of names) {
-    const spec = config.clips[scene];
-    if (!spec) fail(`clips.json has no such scene: ${scene}`);
-    const raw = join(TMP_DIR, `${scene}.raw.mp3`);
-    const synthesized = synthesize({
-      id: scene,
-      model: config.model,
-      voice: config.voice,
-      text: spec.text,
-      instruction: config.instruction,
-      rate: config.rate,
-      pitch: config.pitch,
-      volume: config.volume,
-      format: config.format,
-      sampleRate: config.sampleRate,
-      language: config.language,
-      out: raw,
-    });
-    if (!synthesized) { log(`  ! synthesis failed: ${scene}`); continue; }
-    const mp3 = join(CLIPS_DIR, `${scene}.mp3`);
-    const wav = join(CLIPS_DIR, `${scene}.wav`);
-    if (!normalize(ffmpeg, { raw, mp3, wav, loudnorm: config.loudnorm })) { log(`  ! normalisation failed: ${scene}`); continue; }
-    const seconds = ffprobeDuration(ffmpeg, mp3);
-    log(`  ok ${String(scene).padEnd(14)} ${seconds === null ? '?' : seconds.toFixed(2) + 's'}  ${mp3}`);
+  // `--lang en` renders just that language, which is what you want when only
+  // the English copy or voice changed and the Chinese clips are still good.
+  const requested = argValue('--lang');
+  const languages = requested ? [requested] : allLanguages();
+  for (const code of languages) {
+    if (!allLanguages().includes(code)) fail(`no such language in clips.json: ${code} (have: ${allLanguages().join(', ')})`);
+  }
+
+  const scenes = only ? [only] : Object.keys(config.clips);
+  if (only && !config.clips[only]) fail(`clips.json has no such scene: ${only}`);
+
+  for (const code of languages) {
+    const s = settingsFor(code);
+    log(`── ${code}  (${s.model} / ${s.voice})`);
+    for (const scene of scenes) renderScene(ffmpeg, scene, code);
   }
   log(`\nOutput directory: ${CLIPS_DIR}`);
 }
