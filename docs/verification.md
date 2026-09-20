@@ -111,9 +111,8 @@ silence with a plausible length** passed every gate. Measured levels:
 | **Floors applied** | **≥ −30 dB** | **≥ −35 dB** |
 
 **Margins, computed per floor:** the peak floor clears the worst shipped clip by **25.8 dB**
-(−4.2 dB against −30 dB), but the mean floor clears it by **14.4 dB** (−20.6 dB against
-−35 dB). Both are comfortable; the two are not the same margin, and an earlier version of
-this line wrongly said "more than 25 dB" for both.
+(−4.2 dB against −30 dB), the mean floor by **14.4 dB** (−20.6 dB against −35 dB). Both are
+comfortable, and they are not the same margin.
 
 An existing tool, `ttsproof` (v0.4.0), was evaluated first. It catches clipping and
 truncation, but **not a fully silent file**: its source sets `empty_audio` only when the file
