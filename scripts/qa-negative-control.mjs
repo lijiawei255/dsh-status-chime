@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+/**
+ * qa-negative-control.mjs — prove the quality gate actually rejects bad audio.
+ *
+ * A gate that only ever says "pass" is worthless, and the silence floors exist
+ * because the previous gate passed a fully silent file: the peak check only looked
+ * for clipping, so a clip with a plausible length and no signal sailed through.
+ *
+ * This injects the defects that matter and asserts the gate names them. It runs
+ * entirely offline: the ASR and Omni helpers are pointed at a nonexistent
+ * interpreter, so those two checks fail immediately without a network call, which
+ * also keeps the run free and deterministic. The assertions are about the checks
+ * that do not need a model - the silence floors and the speech-rate verdicts.
+ *
+ *   node scripts/qa-negative-control.mjs
+ */
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(join(HERE, '..'));
+
+function findFfmpeg() {
+  for (const c of ['ffmpeg', process.env.VOICE_ALERTS_FFMPEG].filter(Boolean)) {
+    const r = spawnSync(c, ['-version'], { windowsHide: true, stdio: 'ignore' });
+    if (!r.error && r.status === 0) return c;
+  }
+  return null;
+}
+
+const ffmpeg = findFfmpeg();
+if (ffmpeg === null) {
+  process.stderr.write('ffmpeg is required to synthesise the defect fixtures\n');
+  process.exit(1);
+}
+
+const SANDBOX = mkdtempSync(join(tmpdir(), 'qa-negctl-'));
+const CLIPS = join(SANDBOX, 'assets', 'clips');
+mkdirSync(CLIPS, { recursive: true });
+
+/** A silent clip of the given length: the defect the old gate could not see. */
+function silent(name, seconds) {
+  const out = join(CLIPS, name);
+  const r = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'anullsrc=r=24000:cl=mono', '-t', String(seconds), '-b:a', '128k', out],
+  { windowsHide: true, stdio: 'ignore' });
+  if (r.status !== 0) throw new Error(`could not create ${name}`);
+}
+
+/** A quiet-but-present clip: above silence, far below the shipped clips. */
+function veryQuiet(name, seconds) {
+  const out = join(CLIPS, name);
+  const r = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', `sine=frequency=440:duration=${seconds}`, '-af', 'volume=-46dB', '-b:a', '128k', out],
+  { windowsHide: true, stdio: 'ignore' });
+  if (r.status !== 0) throw new Error(`could not create ${name}`);
+}
+
+// Scenes chosen so each fixture maps to one verdict:
+//   turn-done    silent, plausible length      -> must fail the silence floors
+//   needs-input  quiet but present            -> must fail the mean floor only
+//   approval     a real shipped clip          -> must pass (no false positive)
+//   job-done     real clip, padded with silence so its net rate collapses -> rate flag
+silent('turn-done.mp3', 1.58);
+silent('turn-done.wav', 1.58);
+veryQuiet('needs-input.mp3', 2.09);
+veryQuiet('needs-input.wav', 2.09);
+
+const REAL = join(ROOT, 'assets', 'clips', 'approval.mp3');
+if (!existsSync(REAL)) {
+  process.stderr.write(`cannot find a healthy control clip at ${REAL}\n`);
+  process.exit(1);
+}
+copyFileSync(REAL, join(CLIPS, 'approval.mp3'));
+// A couple more healthy clips, so the batch median the rate is judged against is
+// not degenerate.
+for (const scene of ['turn-error', 'goal-complete']) {
+  const src = join(ROOT, 'assets', 'clips', `${scene}.mp3`);
+  if (existsSync(src)) copyFileSync(src, join(CLIPS, `${scene}.mp3`));
+}
+
+// A stretched clip: the speaking rate itself is slowed, so units per second of
+// actual speech collapses. Padding with silence would NOT do this - the net rate
+// deliberately ignores silence, which is the whole point of measuring net speech.
+const jobDoneSrc = join(ROOT, 'assets', 'clips', 'job-done.mp3');
+if (existsSync(jobDoneSrc)) {
+  const stretched = join(CLIPS, 'job-done.mp3');
+  const r = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', jobDoneSrc,
+    // atempo is limited to 0.5..100, so chain two to reach 0.35.
+    '-af', 'atempo=0.5,atempo=0.7', '-b:a', '128k', stretched], { windowsHide: true, stdio: 'ignore' });
+  if (r.status !== 0) throw new Error('could not create the stretched fixture');
+}
+
+writeFileSync(join(SANDBOX, 'assets', 'clips.json'), `${JSON.stringify({
+  defaultLanguage: 'zh',
+  languages: { en: { voice: 'unused' } },
+  clips: {
+    'turn-done': { text: '任务完成。', expect: '任务完成' },
+    'needs-input': { text: '需要你回答。', expect: '需要你回答' },
+    'approval': { text: '有操作等待你批准。', expect: '有操作等待你批准' },
+    'turn-error': { text: '任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。', expect: '任务执行出错' },
+    'goal-complete': { text: '目标已完成。', expect: '目标已完成' },
+    'job-done': { text: '后台任务完成。', expect: '后台任务完成' },
+  },
+}, null, 2)}\n`, 'utf8');
+
+// No network: a nonexistent interpreter makes the ASR and Omni helpers fail at
+// once, so the run is offline, deterministic and free.
+const run = spawnSync(process.execPath, [join(HERE, 'qa.mjs'), 'clips', '--root', SANDBOX, '--lang', 'zh'], {
+  encoding: 'utf8', windowsHide: true,
+  env: { ...process.env, PYTHON: 'no-such-interpreter-for-negative-control',
+    VOICE_ALERTS_UTMOS_PYTHON: 'no-such-interpreter-for-negative-control' },
+});
+const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
+
+const results = [];
+function check(name, ok, detail = '') { results.push({ name, ok, detail }); }
+
+/** The failure list reported for one clip id. */
+function failuresFor(id) {
+  const block = output.split(`\n${id}\n`)[1];
+  if (block === undefined) return null;
+  return /failed: (.*)/.exec(block)?.[1] ?? '';
+}
+
+/** The rate line reported for one clip id, so the detail does not quote another clip. */
+function rateLineFor(id) {
+  const block = output.split(`\n${id}\n`)[1];
+  return block === undefined ? null : /rate [\d.]+ units\/s[^\n]*/.exec(block)?.[0] ?? '';
+}
+
+check('the gate exits non-zero when defects are present', run.status !== 0, `exit ${run.status}`);
+
+const silentFailures = failuresFor('turn-done');
+check('a silent clip fails the peak floor',
+  silentFailures !== null && /effectively silent/.test(silentFailures),
+  silentFailures ?? '(no block found)');
+check('a silent clip fails on both the peak and the mean floor',
+  silentFailures !== null && (silentFailures.match(/effectively silent/g) ?? []).length === 2,
+  silentFailures ?? '(no block found)');
+
+const quietFailures = failuresFor('needs-input');
+check('a very quiet clip fails the mean floor',
+  quietFailures !== null && /mean .* effectively silent/.test(quietFailures),
+  quietFailures ?? '(no block found)');
+
+const healthyFailures = failuresFor('approval');
+check('a healthy clip does NOT trip the silence floors (no false positive)',
+  healthyFailures !== null && !/effectively silent/.test(healthyFailures),
+  healthyFailures === '' ? '(no failures)' : (healthyFailures ?? '(no block found)'));
+
+const stretchedRate = rateLineFor('job-done');
+check('a stretched clip is flagged as a speech-rate outlier',
+  /vs .* median|implausible/.test(stretchedRate ?? ''),
+  stretchedRate || '(no rate line)');
+
+const healthyRate = rateLineFor('approval');
+check('a healthy clip is NOT flagged as a rate outlier',
+  healthyRate !== null && !/vs .* median|implausible/.test(healthyRate),
+  healthyRate || '(no rate line)');
+
+check('an unavailable UTMOS is reported, not failed',
+  /UTMOS not available/.test(output),
+  (/UTMOS not available[^\n]*/.exec(output)?.[0] ?? '(no note)'));
+
+// ── report ────────────────────────────────────────────────────────────────
+const failed = results.filter((r) => !r.ok);
+for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  — ${r.detail}` : ''}`);
+console.log(`\n==== ${results.length - failed.length}/${results.length} checks passed ====`);
+if (failed.length > 0) {
+  console.log('\nfull gate output:\n');
+  console.log(output.split('\n').slice(0, 40).join('\n'));
+}
+rmSync(SANDBOX, { recursive: true, force: true });
+process.exit(failed.length === 0 ? 0 : 1);
