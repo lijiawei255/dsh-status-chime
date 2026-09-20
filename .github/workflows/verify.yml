@@ -1,4 +1,4 @@
-# Continuous verification for dsh-voice-alerts.
+# Continuous verification for dsh-status-chime.
 #
 # What this proves and does not prove, stated plainly, because a green check that
 # verifies nothing is worse than no check at all.
@@ -167,9 +167,9 @@ jobs:
           Write-Host "dependencies: $($deps -join ', ')"
           Write-Host "bundles:      $($bundles -join ', ')"
 
-          if ($deps -notcontains 'dsh-voice-alerts') { throw 'the package was not added to dependencies' }
+          if ($deps -notcontains 'dsh-status-chime') { throw 'the package was not added to dependencies' }
           # The assertion that actually matters: a layer, not merely a dependency.
-          if ($bundles -notcontains 'dsh-voice-alerts') { throw 'the package was NOT registered in dsh.profile.bundles' }
+          if ($bundles -notcontains 'dsh-status-chime') { throw 'the package was NOT registered in dsh.profile.bundles' }
           Write-Host 'installed and registered as a profile layer'
 
       - name: Confirm the plugin needs no third-party runtime dependency

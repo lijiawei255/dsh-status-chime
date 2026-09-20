@@ -41,26 +41,26 @@ Record this as `<PROFILE>` for the remaining steps.
 ## Step 2 — Install the package
 
 ```powershell
-dsh plugin --profile <PROFILE> add github:lijiawei255/dsh-voice-alerts
+dsh plugin --profile <PROFILE> add github:lijiawei255/dsh-status-chime
 ```
 
 If the user prefers a local copy (offline machine, or they want to modify it):
 
 ```powershell
-git clone https://github.com/lijiawei255/dsh-voice-alerts
-dsh plugin --profile <PROFILE> add .\dsh-voice-alerts
+git clone https://github.com/lijiawei255/dsh-status-chime
+dsh plugin --profile <PROFILE> add .\dsh-status-chime
 ```
 
 **Verify the install registered the bundle**, because this is where a silent failure
 happens. Read `<PROFILE>/package.json` and confirm that:
-- `dependencies` contains `dsh-voice-alerts`
-- **`dsh.profile.bundles` also contains `dsh-voice-alerts`**
+- `dependencies` contains `dsh-status-chime`
+- **`dsh.profile.bundles` also contains `dsh-status-chime`**
 
 The second one is the important one: a package that is merely a dependency is *not* loaded
 as a profile layer. If `dsh` printed
 
 ```
-dsh: warning: dsh-voice-alerts declares no dsh.bundle — installed as a plain dependency, not a profile layer
+dsh: warning: dsh-status-chime declares no dsh.bundle — installed as a plain dependency, not a profile layer
 ```
 
 then the package was read incorrectly (a truncated download, or a `package.json` that lost
@@ -142,8 +142,8 @@ records that as `completed`. See the README's verification section.
 ## Uninstall
 
 1. Remove the entry from `$DSH_HOME/profiles/<PROFILE>/cordis.patch.yml` if one was added
-   by hand, or run `dsh plugin --profile <PROFILE> remove dsh-voice-alerts`.
-2. Confirm `dsh-voice-alerts` is gone from both `dependencies` and `dsh.profile.bundles` in
+   by hand, or run `dsh plugin --profile <PROFILE> remove dsh-status-chime`.
+2. Confirm `dsh-status-chime` is gone from both `dependencies` and `dsh.profile.bundles` in
    the profile's `package.json`.
 3. Restart DSH Desktop.
 

@@ -1,4 +1,4 @@
-# dsh-voice-alerts
+# dsh-status-chime
 
 **[中文](README.md) | [English](README.en.md)**
 
@@ -46,7 +46,7 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 
 `approval` only fires under the `ask` approval policy; under `never` nothing is waiting for you, so nothing is spoken. It listens on the **`approval/asked` session event**, which is always emitted under `ask`, with the scoped `approval/request` waterfall kept as a fallback. Both paths play the same clip.
 
-Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the [Releases](https://github.com/lijiawei255/dsh-voice-alerts/releases) page, where they can be played directly.
+Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) page, where they can be played directly.
 
 ## Install
 
@@ -54,7 +54,7 @@ Audio samples: GitHub's Markdown cannot embed a player, so the clips are attache
 
 Send this to your DSH:
 
-> Install `https://github.com/lijiawei255/dsh-voice-alerts` into my DSH desktop profile, and remind me to restart when it's done.
+> Install `https://github.com/lijiawei255/dsh-status-chime` into my DSH desktop profile, and remind me to restart when it's done.
 
 The repository includes [INSTALL.md](INSTALL.md), which spells out every step. Its purpose is to make **different agents produce the same result** instead of improvising.
 
@@ -62,11 +62,11 @@ The repository includes [INSTALL.md](INSTALL.md), which spells out every step. I
 
 ```powershell
 # straight from GitHub
-dsh plugin --profile desktop add github:lijiawei255/dsh-voice-alerts
+dsh plugin --profile desktop add github:lijiawei255/dsh-status-chime
 
 # or clone / download a ZIP first, then point at the local directory
-git clone https://github.com/lijiawei255/dsh-voice-alerts
-dsh plugin --profile desktop add .\dsh-voice-alerts
+git clone https://github.com/lijiawei255/dsh-status-chime
+dsh plugin --profile desktop add .\dsh-status-chime
 ```
 
 This installs the package into the profile and registers it as a profile layer (which works because the package declares `dsh.bundle`; this repository already does).
@@ -313,7 +313,7 @@ The scene is **kept** (it does work for tool-task failures), but its trigger **h
 ## Repository layout
 
 ```
-dsh-voice-alerts/
+dsh-status-chime/
 ├── lib/index.js                  # the plugin; the only runtime code
 ├── assets/
 │   ├── clips/                    # 7 clips, each as mp3 + wav

@@ -391,7 +391,7 @@ for (const target of targets) {
 
 // ── report ────────────────────────────────────────────────────────────────
 const lines = [
-  '# dsh-voice-alerts audio quality report',
+  '# dsh-status-chime audio quality report',
   '',
   `Generated: ${new Date().toISOString()}`,
   `Scope: ${mode} (${records.length} clip(s))`,

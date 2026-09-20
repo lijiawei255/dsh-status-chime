@@ -1,5 +1,5 @@
 /**
- * dsh-voice-alerts offline acceptance test.
+ * dsh-status-chime offline acceptance test.
  *
  * Drives the plugin through a mock cordis context, so it needs neither a DSH
  * restart nor a real event to occur.

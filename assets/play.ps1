@@ -1,4 +1,4 @@
-# SoundPlayer wrapper used by dsh-voice-alerts when ffplay is unavailable.
+# SoundPlayer wrapper used by dsh-status-chime when ffplay is unavailable.
 #
 # ASCII-ONLY ON PURPOSE. Windows PowerShell 5.1 reads .ps1 files as ANSI/GBK on
 # CJK systems unless the file carries a UTF-8 BOM, so non-ASCII comments get

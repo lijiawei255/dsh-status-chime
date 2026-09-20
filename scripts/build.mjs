@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * build.mjs — generate the alert audio for dsh-voice-alerts.
+ * build.mjs — generate the alert audio for dsh-status-chime.
  *
  * Data flow
  *   assets/clips.json  (the single source of truth: line, voice, settings)

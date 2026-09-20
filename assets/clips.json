@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Single source of truth for dsh-voice-alerts: the spoken line, the voice, and the synthesis settings.",
+    "Single source of truth for dsh-status-chime: the spoken line, the voice, and the synthesis settings.",
     "Regenerate everything with: node scripts/build.mjs build",
     "Then check it with:          node scripts/qa.mjs clips",
     "",

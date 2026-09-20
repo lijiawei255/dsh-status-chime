@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Renamed from `dsh-voice-alerts` to `dsh-status-chime`.** The old name sat one letter
+  away from an unrelated plugin already listed in the community catalog
+  (`dsh-voice-alert`), and the marketplace hides one of two same-named packages, so the
+  collision was a real discoverability risk. The new name also leads with "status" rather
+  than "voice", which matches what the plugin actually reports.
+- The change is **package-level only**: the cordis `id` stays `voice-alerts`, the slash
+  command stays `/voice-alerts`, and the config and clip paths under `$DSH_HOME` are
+  untouched. An existing install keeps working; only the npm/GitHub name changes.
+
 ## [0.2.0] — 2026-09-21
 
 ### Added

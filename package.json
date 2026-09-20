@@ -1,5 +1,5 @@
 {
-  "name": "dsh-voice-alerts",
+  "name": "dsh-status-chime",
   "version": "0.2.0",
   "description": "Spoken status alerts for DeepSeek Harness: say it out loud when a turn finishes, fails, a job ends, an approval is waiting, or the agent starts waiting for you. · DSH 语音状态提示：任务完成、出错、后台任务结束、等待批准、等待你回答时用声音提醒。",
   "license": "MIT",
@@ -45,12 +45,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lijiawei255/dsh-voice-alerts.git"
+    "url": "git+https://github.com/lijiawei255/dsh-status-chime.git"
   },
   "bugs": {
-    "url": "https://github.com/lijiawei255/dsh-voice-alerts/issues"
+    "url": "https://github.com/lijiawei255/dsh-status-chime/issues"
   },
-  "homepage": "https://github.com/lijiawei255/dsh-voice-alerts#readme",
+  "homepage": "https://github.com/lijiawei255/dsh-status-chime#readme",
   "os": [
     "win32"
   ]

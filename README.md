@@ -1,4 +1,4 @@
-# dsh-voice-alerts
+# dsh-status-chime
 
 **[中文](README.md) | [English](README.en.md)**
 
@@ -47,7 +47,7 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 `approval` 只在审批策略为 `ask`（需要人工确认）时才会响 —— 策略是 `never` 时没有任何东西在等你，自然也不该出声。它监听的是**会话事件 `approval/asked`**，这条在 `ask` 策略下必定派发；另外还挂了作用域瀑布 `approval/request` 作兜底，两条路径播的是同一条音。
 
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
-见 [Releases](https://github.com/lijiawei255/dsh-voice-alerts/releases) 页面的音频附件。
+见 [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) 页面的音频附件。
 
 ## 安装
 
@@ -55,7 +55,7 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 
 把下面这句话发给你的 DSH：
 
-> 把 `https://github.com/lijiawei255/dsh-voice-alerts` 装进我的 DSH desktop profile，装完提醒我重启。
+> 把 `https://github.com/lijiawei255/dsh-status-chime` 装进我的 DSH desktop profile，装完提醒我重启。
 
 仓库里有一份 [INSTALL.md](INSTALL.md)，写清了每一步该做什么。它存在的意义是：**让不同的 Agent 装出同样的结果**，而不是各自发挥。
 
@@ -63,11 +63,11 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 
 ```powershell
 # 从 GitHub 直接装
-dsh plugin --profile desktop add github:lijiawei255/dsh-voice-alerts
+dsh plugin --profile desktop add github:lijiawei255/dsh-status-chime
 
 # 或者先 clone / 下载 ZIP，再指向本地目录
-git clone https://github.com/lijiawei255/dsh-voice-alerts
-dsh plugin --profile desktop add .\dsh-voice-alerts
+git clone https://github.com/lijiawei255/dsh-status-chime
+dsh plugin --profile desktop add .\dsh-status-chime
 ```
 
 这条命令会做两件事：把包装进 profile，并把包登记为一个 profile 层（前提是包里声明了 `dsh.bundle`，本仓库已经声明了）。
@@ -296,7 +296,7 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 ## 目录结构
 
 ```
-dsh-voice-alerts/
+dsh-status-chime/
 ├── lib/index.js                  # 插件主体，唯一运行时代码
 ├── assets/
 │   ├── clips/                    # 7 条音频，每条 mp3 + wav

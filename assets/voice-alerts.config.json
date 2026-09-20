@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "dsh-voice-alerts runtime config. The plugin re-reads it by mtime, so edits apply immediately.",
+    "dsh-status-chime runtime config. The plugin re-reads it by mtime, so edits apply immediately.",
     "The shipped defaults work as-is; this file is only needed to change something.",
     "You can also toggle alerts from chat with /voice-alerts on|off.",
     "Spoken lines and synthesis settings live in assets/clips.json, not here."
