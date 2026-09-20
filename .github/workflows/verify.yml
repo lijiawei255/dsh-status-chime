@@ -52,6 +52,14 @@ jobs:
         with:
           node-version: '22'
 
+      # `dsh plugin add` installs through pnpm, which the runner image does not
+      # ship. Without this the install step fails with "'pnpm' is not recognized"
+      # long before it can say anything about the plugin itself.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       # The fallback assertions below only mean something if no external player exists.
       - name: Confirm no ffplay on the runner
         shell: pwsh
@@ -103,6 +111,12 @@ jobs:
       - name: Install the official DSH CLI
         shell: pwsh
         run: |
+          # dsh shells out to pnpm for plugin installs; fail here with a clear
+          # message rather than deep inside dsh if it ever goes missing again.
+          if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+            throw 'pnpm is not on PATH; dsh plugin add cannot work without it'
+          }
+          pnpm --version
           npm install --global "@deepseek-ai/dsh@$env:DSH_TEST_VERSION"
           if ($LASTEXITCODE -ne 0) { throw "installing the DSH CLI failed with exit code $LASTEXITCODE" }
           dsh --version
