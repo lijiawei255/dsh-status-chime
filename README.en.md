@@ -204,6 +204,18 @@ scripts/qa.mjs clips          quality gate over everything
 
 **One lesson worth passing on**: do not make a model's subjective score a hard gate. The same clip was scored "naturalness 6 / character 4" on one run and "naturalness 9 / character 7" on the next, and four clearly different clips once received identical scores. So this project splits the metrics in two: **objective measures (ASR similarity, clipping, clarity, cleanliness) gate the build, and subjective ones (naturalness, character, maturity) only inform the decision**, with the final call left to ears. That division is what makes the workflow stable enough to rely on.
 
+**Three checks added later**, each because a specific hole turned up first:
+
+| Check | Tier | Why it exists |
+|---|---|---|
+| **Silence floors** (peak >= -30 dB, mean >= -35 dB) | hard gate | The peak check only looked for **clipping**, so a clip with a plausible length and **no signal at all** passed every gate — one of the classic TTS failure modes. Measured on the shipped clips: peak -4.2..-1.9 dB, mean -20.6..-16.6 dB, against -91 dB for true silence. Both floors clear the real range by more than 25 dB |
+| **Net speech rate** (units per second of actual speech) | advisory | The Chinese set speaks **deliberately slowly** (rate 0.95), so the 3.2-5.5 units/s band from human broadcast-speech research would fail **seven of the eight**. What matters here is consistency between clips, because length carries the urgency, so each clip is compared against the **median of its own language**. Clips under 5 units are exempt, or a two-word clip would false-positive |
+| **UTMOS** (a trained MOS predictor) | advisory | Gives naturalness a **reproducible** number, which is the gap the unreliable model score left. It must be compared **per language**: it scores every English clip **above** every Chinese one (4.38-4.51 against 3.75-4.28), so a cross-language comparison would read as a defect in the Chinese set |
+
+All three have **negative controls** (`scripts/qa-negative-control.mjs`, offline and free): it injects a fully silent clip, a very quiet one, and a stretched one, then asserts the gates actually report them while a healthy clip is left alone. A gate that only ever says "pass" is worth nothing.
+
+> One detour worth recording: before adding the silence floors, an existing TTS QA tool (`ttsproof`) was tried. It catches clipping and truncation but **not a fully silent file** — its `empty_audio` flag only tests for a missing file or one under 44 bytes, never the content. So that floor is hand-written rather than inherited.
+
 ## Configuration
 
 Config file: `$DSH_HOME/voice-alerts.config.json` (`$DSH_HOME` is usually `~/.dsh`).

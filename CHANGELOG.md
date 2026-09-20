@@ -8,6 +8,29 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Silence floors in the quality gate.** The peak check only looked for clipping, so a clip
+  of pure silence with a plausible length passed every gate — one of the classic TTS failure
+  modes. Peak must now be >= -30 dB and mean >= -35 dB. Measured: shipped clips peak at
+  -4.2..-1.9 dB and average -20.6..-16.6 dB, true silence measures -91 dB.
+- **Net speech rate as an advisory check**, measured over actual speech rather than total
+  duration. Compared against the median of the same language, with clips under 5 units
+  exempt. A fixed band was rejected: the clips are deliberately slow, and the 3.2-5.5
+  units/s range from broadcast-speech research would fail seven of the eight.
+- **UTMOS naturalness scoring** via `tools/qw_local_utmos.py`, optional and advisory.
+  Compared per language, because the predictor scores every English clip above every Chinese
+  one and a cross-language comparison would be misleading. A missing install is reported,
+  never treated as a failed clip.
+- **`scripts/qa-negative-control.mjs`**, an offline regression test that injects silence, a
+  very quiet clip and a stretched clip, then asserts the gates report them while a healthy
+  clip is left alone. No API calls, so it costs nothing to run.
+
+### Changed
+
+- The quality gate is language-aware and checks every declared language, instead of one flat
+  scene list that only ever looked for `<scene>.mp3`.
+- `qa.mjs` now takes `--lang <code>`, and reports speech time, units/s and UTMOS in its
+  table. `VOICE_ALERTS_UTMOS_PYTHON` selects the interpreter that has `utmos-pytorch`.
+
 - **English spoken alerts.** All eight scenes now ship in Chinese and English in the
   same package, selected with the `language` setting or `/voice-alerts lang <zh|en>`.
   Chinese remains the default.

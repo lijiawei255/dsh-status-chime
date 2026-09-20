@@ -84,6 +84,60 @@ shipped package always contains the English set, and packaged assets are the las
 the resolution chain, so the branch cannot be reached without renaming shipped files — a
 worse test than the gap it would close.
 
+## 2c. Audio quality gate
+
+Three checks were added after finding a specific hole, and all three were calibrated against
+the shipped clips rather than copied from a paper.
+
+**Silence floors (hard gate).** The peak check only looked for clipping, so a clip of **pure
+silence with a plausible length** passed every gate. Measured levels:
+
+| | peak | mean |
+|---|---|---|
+| Shipped clips (16) | −4.2 … −1.9 dB | −20.6 … −16.6 dB |
+| A fully silent file | −91 dB | −91 dB |
+| **Floors applied** | **≥ −30 dB** | **≥ −35 dB** |
+
+Both floors clear the worst real clip by more than 25 dB.
+
+An existing tool, `ttsproof` (v0.4.0), was evaluated first. It catches clipping and
+truncation, but **not a fully silent file**: its source sets `empty_audio` only when the file
+is missing or ≤ 44 bytes, never by inspecting the samples. That is why this floor is
+hand-written.
+
+**Net speech rate (advisory).** A fixed band does not fit: the Chinese clips are synthesized
+slowly on purpose (rate 0.95), and the 3.2–5.5 units/s range from human broadcast-speech
+research **would fail seven of the eight**. Each clip is compared against the median of its
+own language instead. Clips below 5 units are exempt, because a two-word clip's rate is too
+noisy: the English `turn-done` measures 1.74 units/s, a −42% deviation, and flagging it
+would be a false positive.
+
+Measured on the shipped set — Chinese median 2.97 (range 2.53–3.85), English median 3.02
+(range 1.74–3.32). Exactly one clip is flagged: `goal-blocked` at **+30% vs the median**,
+which independently reproduces a review finding from an earlier session.
+
+**UTMOS (advisory).** Gives naturalness a reproducible number. It **must** be compared per
+language: every English clip scores above every Chinese one (4.38–4.51 against 3.75–4.28),
+so a cross-language comparison would read as a defect in the Chinese set. The predictor
+appears to prefer the native-English voice, and UTMOS was trained largely on English data.
+It is advisory, not a gate: a predicted MOS is not a listening test.
+
+**Negative controls** (`scripts/qa-negative-control.mjs`) — offline, no API calls, 8 checks:
+
+| Injected defect | Expected | Result |
+|---|---|---|
+| Fully silent, plausible length | hard fail on both floors | ✅ `peak -91 dB is effectively silent` and the mean floor |
+| Very quiet but present (−46 dB sine) | fail the mean floor | ✅ `mean -67.6 dB is effectively silent` |
+| Healthy shipped clip | no silence-floor trip | ✅ no false positive |
+| Speech slowed to 0.35× | rate outlier | ✅ `0.93 units/s (implausible)` |
+| Healthy shipped clip | no rate flag | ✅ `2.99 units/s` |
+| UTMOS not installed | reported, never failed | ✅ `UTMOS not available (…)` |
+
+**Not verified:** that the gates catch every TTS failure mode. They catch silence, quiet
+clips, clipping, truncation, wrong or missing words, and gross rate drift. They do not
+detect wrong prosody, wrong emotion, or a wrong-but-plausible reading — those remain a
+human judgement.
+
 ## 3. Backend layer
 
 Measured with `scripts/selftest.mjs`, which forces each backend through the real code path.
