@@ -9,7 +9,7 @@
 #     recognises it as a profile LAYER because the package declares `dsh.bundle`
 #   - the manifests stay valid JSON without a BOM
 #   - the plugin module imports node builtins only, so a clean machine needs nothing
-#   - all 16 packaged clips exist and are non-empty
+#   - all 32 packaged clips exist and are non-empty (8 scenes x 2 languages x 2 formats)
 #   - with no ffplay anywhere, the PowerShell backend is still detected and used
 #   - the 41-check logic suite passes
 #   - no personal path or credential-shaped string is committed
@@ -105,14 +105,35 @@ jobs:
           $scenes = @($clips.clips.PSObject.Properties.Name)
           if ($scenes.Count -ne 8) { throw "expected 8 scenes in clips.json, found $($scenes.Count)" }
 
-          foreach ($scene in $scenes) {
-            foreach ($ext in @('mp3', 'wav')) {
-              $clip = "assets/clips/$scene.$ext"
-              if (-not (Test-Path $clip)) { throw "missing clip: $clip" }
-              if ((Get-Item $clip).Length -lt 1000) { throw "clip is suspiciously small: $clip" }
+          # Every shipped language needs a complete set: the default keeps the
+          # bare <scene> name, every other language uses <scene>.<code>.
+          $default = if ($clips.defaultLanguage) { $clips.defaultLanguage } else { 'zh' }
+          $languages = @($default) + @($clips.languages.PSObject.Properties.Name | Where-Object { $_ -ne $default })
+          if ($languages.Count -lt 2) { throw "clips.json declares only one language; the bilingual sets are the point" }
+
+          $checked = 0
+          foreach ($lang in $languages) {
+            foreach ($scene in $scenes) {
+              $base = if ($lang -eq $default) { $scene } else { "$scene.$lang" }
+              foreach ($ext in @('mp3', 'wav')) {
+                $clip = "assets/clips/$base.$ext"
+                if (-not (Test-Path $clip)) { throw "missing clip: $clip" }
+                if ((Get-Item $clip).Length -lt 1000) { throw "clip is suspiciously small: $clip" }
+                $checked++
+              }
             }
           }
-          Write-Host "manifests valid; $($scenes.Count) scenes x 2 formats present ($($scenes -join ', '))"
+
+          # Each scene must carry copy for every non-default language, or the
+          # regeneration path would silently skip it.
+          foreach ($scene in $scenes) {
+            foreach ($lang in $languages) {
+              if ($lang -eq $default) { continue }
+              $copy = $clips.clips.$scene.$lang
+              if (-not $copy -or -not $copy.text) { throw "clips.json: $scene has no '$lang' copy" }
+            }
+          }
+          Write-Host "manifests valid; $($scenes.Count) scenes x $($languages.Count) languages x 2 formats = $checked clips ($($languages -join ', '))"
 
       - name: Install the official DSH CLI
         shell: pwsh
