@@ -55,10 +55,16 @@ jobs:
       # `dsh plugin add` installs through pnpm, which the runner image does not
       # ship. Without this the install step fails with "'pnpm' is not recognized"
       # long before it can say anything about the plugin itself.
+      #
+      # Pinned to the pnpm major line that the profile layout is known to work
+      # with. A profile carries a `pnpm-workspace.yaml` declaring `packages: [.]`,
+      # which makes it look like a workspace root; pnpm 9 refuses a plain `add`
+      # there with ERR_PNPM_ADDING_TO_ROOT, while pnpm 11 accepts it.
+      # pnpm 9 is deliberately avoided, not merely "older".
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       # The fallback assertions below only mean something if no external player exists.
       - name: Confirm no ffplay on the runner
@@ -116,7 +122,12 @@ jobs:
           if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
             throw 'pnpm is not on PATH; dsh plugin add cannot work without it'
           }
-          pnpm --version
+          $pnpmVersion = pnpm --version
+          $pnpmMajor = [int]($pnpmVersion -split '\.')[0]
+          if ($pnpmMajor -lt 10) {
+            throw "pnpm $pnpmVersion cannot add into a profile: the profile's pnpm-workspace.yaml makes it look like a workspace root, and pnpm 9 rejects a plain add with ERR_PNPM_ADDING_TO_ROOT"
+          }
+          Write-Host "pnpm $pnpmVersion"
           npm install --global "@deepseek-ai/dsh@$env:DSH_TEST_VERSION"
           if ($LASTEXITCODE -ne 0) { throw "installing the DSH CLI failed with exit code $LASTEXITCODE" }
           dsh --version

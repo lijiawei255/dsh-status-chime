@@ -161,8 +161,29 @@ Useful things to check:
   fire.
 - `needs-input` depends on the tool names in `waitingTools`. If DSH renamed a tool, update
   that array in the config.
-- `approval/request` is only delivered under the `ask` approval policy; `never` means it
-  never fires.
+- `approval` is only reachable under the `ask` approval policy; under `never` nothing is
+  waiting for you, so it never fires.
+
+## 11. `dsh plugin add` fails with `ERR_PNPM_ADDING_TO_ROOT`
+
+Installation runs through pnpm, and a DSH profile carries its own `pnpm-workspace.yaml`
+declaring `packages: [.]`. That makes the profile look like a workspace root, so pnpm 9
+refuses a plain `add`:
+
+```
+ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace
+root … if you really meant it, make it explicit by running this command again with the -w flag
+```
+
+Use pnpm 10 or newer — pnpm 11 accepts the command as-is. Alternatively pass the flag
+through, since `dsh plugin` forwards arguments verbatim:
+
+```powershell
+dsh plugin --profile desktop add -w <package>
+```
+
+Note that this is a pnpm/DSH interaction, not a defect in this plugin: the same command
+fails for any package.
 
 ## Still stuck?
 
