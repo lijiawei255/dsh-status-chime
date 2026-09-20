@@ -56,8 +56,19 @@ and passed the quality gate (`scripts/qa.mjs clips --lang zh|en`):
 | Chinese duration gradient | 7.97 / 5.95 / 4.78 / 3.00 / 2.59 / 2.16 / 2.09 / 1.58 s |
 | English duration gradient | 7.90 / 6.46 / 4.85 / 3.00 / 2.59 / 2.16 / 2.09 / 1.92 s |
 
-The English gradient is monotonic in the same severity order as the Chinese, and every
-adjacent pair is at least 22% apart, so urgency remains readable from clip length alone.
+The English gradient is monotonic in the same severity order as the Chinese. What the
+length actually separates is the **three urgency bands**, not each clip from its neighbour:
+
+| Step | Gap |
+|---|---|
+| Ended band (≤3.00s) → failed/blocked band (≥4.85s) | **38%** |
+| Within the failed/blocked band (4.85 → 6.46 → 7.90s) | 25% / 18% |
+| Within the ended band (1.92 → 2.09 → 2.16 → 2.59 → 3.00s) | 8% / 3% / 17% / 14% |
+
+The closest pair is `goal-complete` 2.16s against `needs-input` 2.09s — **0.072s**, well
+under the 0.10s gap elsewhere in this file called inaudible. That is not an English
+regression: the Chinese set has the same pair at 0.07s. Two clips of the same urgency are
+deliberately close, and no claim is made that every adjacent pair is distinguishable.
 
 An earlier English `turn-error` was 6.55 s against a 6.46 s `job-failed` — a 0.10 s gap that
 no listener could resolve, where the Chinese pair differs by 2.02 s (34%). The line was
@@ -122,7 +133,10 @@ so a cross-language comparison would read as a defect in the Chinese set. The pr
 appears to prefer the native-English voice, and UTMOS was trained largely on English data.
 It is advisory, not a gate: a predicted MOS is not a listening test.
 
-**Negative controls** (`scripts/qa-negative-control.mjs`) — offline, no API calls, 8 checks:
+**Negative controls** (`scripts/qa-negative-control.mjs`) — offline, no API calls. It runs
+**8 assertions across the fixtures below**; two rows cover a pair of assertions each (a silent
+clip is checked against both floors, and both a stretched and a healthy clip are checked for a
+rate flag), which is why the table has fewer rows than the check count:
 
 | Injected defect | Expected | Result |
 |---|---|---|
@@ -144,7 +158,7 @@ Measured with `scripts/selftest.mjs`, which forces each backend through the real
 
 | Check | Result |
 |---|---|
-| PowerShell path selects `.wav` and plays | ✅ the plugin resolves the wav, and `PlaySync` blocks for the clip duration (1.76 s for a 1.58 s clip) |
+| PowerShell path selects `.wav` and plays | ✅ the plugin resolves the wav and `PlaySync` blocks for the clip duration |
 | With ffmpeg absent, playback falls back automatically and still works | ✅ forcing `player: auto` with a bogus `ffplayPath` yields `Player: PowerShell SoundPlayer` and a successful playback |
 | An explicitly requested but missing ffplay fails loudly | ✅ it reports unavailable instead of silently switching backends |
 | Packaged clips resolve with no `clipsDir` configured | ✅ all eight found in `assets/clips/` |
