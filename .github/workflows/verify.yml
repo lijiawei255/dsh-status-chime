@@ -9,7 +9,7 @@
 #     recognises it as a profile LAYER because the package declares `dsh.bundle`
 #   - the manifests stay valid JSON without a BOM
 #   - the plugin module imports node builtins only, so a clean machine needs nothing
-#   - all 14 packaged clips exist and are non-empty
+#   - all 16 packaged clips exist and are non-empty
 #   - with no ffplay anywhere, the PowerShell backend is still detected and used
 #   - the 41-check logic suite passes
 #   - no personal path or credential-shaped string is committed
@@ -89,7 +89,7 @@ jobs:
 
           $clips = Read-Json 'assets/clips.json'
           $scenes = @($clips.clips.PSObject.Properties.Name)
-          if ($scenes.Count -ne 7) { throw "expected 7 scenes in clips.json, found $($scenes.Count)" }
+          if ($scenes.Count -ne 8) { throw "expected 8 scenes in clips.json, found $($scenes.Count)" }
 
           foreach ($scene in $scenes) {
             foreach ($ext in @('mp3', 'wav')) {

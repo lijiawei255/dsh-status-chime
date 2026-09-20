@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-09-21
+
+### Added
+
+- **An eighth scene, `approval`**, spoken when an action is waiting for your approval.
+  It listens on the `approval/asked` session event, which DSH emits whenever an approval
+  request is raised under the `ask` policy, with the scoped `approval/request` waterfall
+  kept as a fallback. Both paths play the same clip. The scene cannot fire under the
+  `never` policy, where nothing waits for you.
+
+### Changed
+
+- `watchApprovals` now defaults to `true`. It previously defaulted to `false`, so approval
+  prompts stayed silent unless you opted in explicitly.
+- `approval/request` now plays the dedicated `approval` clip instead of reusing
+  `needs-input`, so the two situations are distinguishable by ear.
+- The approval scene sits at priority 35, between `job-failed` (40) and `needs-input` (30).
+
 ## [0.1.0] — 2026-09-21
 
 First public release.

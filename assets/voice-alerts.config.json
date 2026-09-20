@@ -38,8 +38,8 @@
     "exit_plan_mode"
   ],
 
-  "_approvalNote": "Also speak on an approval request. Only fires under the 'ask' approval policy.",
-  "watchApprovals": false,
+  "_approvalNote": "Also speak when an approval request is raised. Only fires under the 'ask' approval policy, since nothing waits for you under 'never'.",
+  "watchApprovals": true,
 
   "scenes": {
     "turn-done": { "enabled": true },
@@ -48,6 +48,7 @@
     "job-done": { "enabled": true },
     "job-failed": { "enabled": true },
     "goal-complete": { "enabled": true },
-    "goal-blocked": { "enabled": true }
+    "goal-blocked": { "enabled": true },
+    "approval": { "enabled": true }
   }
 }

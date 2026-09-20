@@ -12,7 +12,7 @@ Search it for `voice-alerts`. What you find there splits the problem in half imm
 
 | Log line | Meaning |
 |---|---|
-| `[voice-alerts] active v0.1.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
+| `[voice-alerts] active v0.2.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
 | `playing <scene>` | The plugin started a player for that scene. If you still hear nothing, see **2** and **3**. |
 | `no audio for <scene>` | The clip file is missing. See **6**. |
 | `throttled <scene>` | The repeat-suppression window caught it. Normal behaviour. |
@@ -27,7 +27,7 @@ running DSH Desktop. You must fully quit and reopen the application.
 
 Check by running `/voice-alerts status` in the chat box:
 
-- `Voice alerts: on (v0.1.0)` → the new code is loaded.
+- `Voice alerts: on (v0.2.0)` → the new code is loaded.
 - Unknown command → the plugin is not loaded at all. Restart, and check for the
   `[voice-alerts] active` line in the log afterwards.
 

@@ -124,8 +124,8 @@ Worth recording because it affects how you develop and install this plugin:
 
 ## 7. What is covered by the offline suite
 
-`scripts/selftest.mjs` runs 41 checks against a mock cordis context, with no restart and no
-real event required. It covers: the seven scene mappings, the four silent goal operations,
+`scripts/selftest.mjs` runs 43 checks against a mock cordis context, with no restart and no
+real event required. It covers: the eight scene mappings, the four silent goal operations,
 subagent filtering, autonomous-round handling, coalescing and priority, per-scene
 throttling, all four `/voice-alerts` verbs, command-name collision handling, asset
 resolution order, and backend selection.
@@ -138,9 +138,10 @@ It runs against a temporary `DSH_HOME`, so it cannot disturb a real installation
 
 | Claim | Confidence |
 |---|---|
-| The seven audio clips are correct and audible | **Verified** (measurement + listening) |
+| The eight audio clips are correct and audible | **Verified** (measurement + listening) |
 | The plugin plays on a clean Windows install with no third-party dependency | **Verified** |
-| Six of seven scenes fire on real events | **Verified** |
+| Seven of eight scenes fire on real events | **Verified** |
+| `approval` fired on a real approval request | **Heard it, but the exact path is unresolved** — the `approval/asked` session event and the `approval/request` waterfall play the same clip, so hearing it does not tell the two apart |
 | `job-failed` fires on background tool-task failures | **Read from source, never observed** |
 | Alert repetition cannot happen on session resume | **Read from source** |
 | macOS / Linux playback | **Not implemented** |

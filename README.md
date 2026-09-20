@@ -24,7 +24,7 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 
 装好即用，不需要配置任何东西。
 
-## 七个场景
+## 八个场景
 
 时长是**刻意设计**的：**长 = 有事需要你，短 = 有事情结束了**。所以即使不看屏幕，光凭声音长短就能判断要不要马上过去。
 
@@ -33,6 +33,7 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 | `turn-error` | 本轮失败，或撞到 token 上限 | **7.97s** | 最长 |
 | `job-failed` | 后台任务失败 | 5.95s | 长 |
 | `goal-blocked` | 目标受阻，需要你介入 | 4.78s | 中长 |
+| `approval` | 有操作在等你批准 | 3.00s | 短 |
 | `job-done` | 后台任务完成 | 2.59s | 中 |
 | `goal-complete` | 目标整体完成（只响一次，不是每轮） | 2.16s | 短 |
 | `needs-input` | 代理停下来等你回答 | 2.09s | 短 |
@@ -42,6 +43,8 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 
 - **`turn-error` 不看是否由你发起**。自动续跑的回合出错，同样需要你知道。
 - **`turn-done` 只看你发起的回合**。否则一个跑 20 轮的目标会响 20 次「任务完成」。自动推进的进度由 `goal-complete` / `goal-blocked` 在**目标级别**汇报，而不是每一轮。
+
+`approval` 只在审批策略为 `ask`（需要人工确认）时才会响 —— 策略是 `never` 时没有任何东西在等你，自然也不该出声。它监听的是**会话事件 `approval/asked`**，这条在 `ask` 策略下必定派发；另外还挂了作用域瀑布 `approval/request` 作兜底，两条路径播的是同一条音。
 
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
 见 [Releases](https://github.com/lijiawei255/dsh-voice-alerts/releases) 页面的音频附件。
@@ -79,7 +82,7 @@ dsh plugin --profile desktop add .\dsh-voice-alerts
 /voice-alerts status
 ```
 
-看到 `Voice alerts: on (v0.1.0)` 和 `Scenes (7)` 就说明装好了。想听一遍全部七条：
+看到 `Voice alerts: on (v0.2.0)` 和 `Scenes (8)` 就说明装好了。想听一遍全部八条：
 
 ```
 /voice-alerts
@@ -173,13 +176,14 @@ scripts/qa.mjs clips          全部质检过关
 | `scenes.<场景>.enabled` | `true` | 单独关掉某个场景 |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | 命中即视为「在等你回答」；DSH 若改工具名可在此覆盖 |
+| `watchApprovals` | `true` | 审批请求是否出声（只在策略为 `ask` 时可能触发） |
 | `clipsDir` | `null` | 自定义音频目录，优先级最高 |
 
 ## 命令
 
 | 命令 | 作用 |
 |---|---|
-| `/voice-alerts` | 依次播放全部七条 |
+| `/voice-alerts` | 依次播放全部八条 |
 | `/voice-alerts on` / `off` | 立即开关（会写回配置文件） |
 | `/voice-alerts status` | 看播放器探测结果、各场景音频是否齐备 |
 | `/voice-alerts test <场景>` | 只播一条，用来排查某类事件有没有触发 |
@@ -269,11 +273,13 @@ node scripts/qa.mjs clips                # 质检
 
 | 层级 | 状态 |
 |---|---|
-| **事件层** | 7 个场景中 **6 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked` |
-| **音频层** | 7 条全部通过质检（ASR 相似度 1.000、四维达标、无削波），且逐条耳听确认真实播放完整 |
+| **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
+| **音频层** | 8 条全部通过质检（ASR 相似度 1.000、四维达标、无削波），且逐条耳听确认真实播放完整 |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
-| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**41 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序 |
-| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、14 个音频齐备、**无 ffplay 时 PowerShell 后端仍被探测到**、41 项自检、隐私扫描 |
+| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**43 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、16 个音频齐备、**无 ffplay 时 PowerShell 后端仍被探测到**、43 项自检、隐私扫描 |
+
+关于 `approval` 的验证要说清楚边界：**触发时审批策略必须是 `ask`**。我本人是在 `ask` 策略下听到提示音的，但当时**无法区分**它走的是会话事件 `approval/asked` 还是兜底的作用域瀑布 `approval/request` —— 两条路径播同一条音。会话事件那条的**行为**由自检覆盖（含「子代理会话的审批不出声」），但它是否在生产环境中被派发，我没有单独取证过。
 
 CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部——包括**它不能证明声音到达扬声器**这一点。
 

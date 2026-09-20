@@ -24,7 +24,7 @@ So the alert is missed and time is wasted. **Switching to audio turns "I have to
 
 Install it and it works. There is nothing to configure.
 
-## The seven scenes
+## The eight scenes
 
 The durations are **deliberate**: **long = something needs you, short = something ended**. So even without looking at the screen, the length of the clip alone tells you whether to drop what you are doing.
 
@@ -33,6 +33,7 @@ The durations are **deliberate**: **long = something needs you, short = somethin
 | `turn-error` | The turn failed, or hit the token ceiling | **7.97s** | longest |
 | `job-failed` | A background job failed | 5.95s | long |
 | `goal-blocked` | A goal is blocked and needs you | 4.78s | medium-long |
+| `approval` | An action is waiting for your approval | 3.00s | short |
 | `job-done` | A background job finished | 2.59s | medium |
 | `goal-complete` | The goal finished (once, not per round) | 2.16s | short |
 | `needs-input` | The agent stopped to ask you something | 2.09s | short |
@@ -42,6 +43,8 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 
 - **`turn-error` does not check who started the turn.** A failure during an autonomous round still needs to reach you.
 - **`turn-done` only speaks for human-initiated turns.** Otherwise a goal that runs 20 rounds would play "task complete" 20 times. Autonomous progress is reported at the **goal** level by `goal-complete` / `goal-blocked`, not per round.
+
+`approval` only fires under the `ask` approval policy; under `never` nothing is waiting for you, so nothing is spoken. It listens on the **`approval/asked` session event**, which is always emitted under `ask`, with the scoped `approval/request` waterfall kept as a fallback. Both paths play the same clip.
 
 Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the [Releases](https://github.com/lijiawei255/dsh-voice-alerts/releases) page, where they can be played directly.
 
@@ -78,7 +81,7 @@ In the chat box, run:
 /voice-alerts status
 ```
 
-If you see `Voice alerts: on (v0.1.0)` and `Scenes (7)`, the install worked. To hear all seven:
+If you see `Voice alerts: on (v0.2.0)` and `Scenes (8)`, the install worked. To hear all eight:
 
 ```
 /voice-alerts
@@ -98,7 +101,8 @@ DSH events  ──▶  lib/index.js  ──▶  coalesce / throttle / priority  
 | `session/event` → `goal/change` | Goal `complete` and `block` |
 | `jobs.onJobDone` | Background job `completed` and `failed` |
 | `tools/pre-execute` | A tool name in `waitingTools` means the agent is about to wait for you |
-| `approval/request` | An approval prompt (only delivered under the `ask` policy) |
+| `session/event` → `approval/asked` | An approval request raised under the `ask` policy |
+| `approval/request` | Fallback path for the same event (also `ask` only) |
 
 **Playback rules**: several events inside one 400 ms window collapse to the **highest-priority** scene only; the same scene will not repeat within 1.5 s; a new alert interrupts the one playing.
 
@@ -133,7 +137,7 @@ Sounding pleasant is not enough — TTS can swallow syllables, mispronounce, or 
 python tools/qw_local_asr.py assets/clips/turn-error.mp3 --lang zh
 ```
 
-This one is a legitimate **hard gate**, because it is mechanically decidable: the intended text is known, and the transcript either matches or it does not. All seven clips in this project score **1.000**.
+This one is a legitimate **hard gate**, because it is mechanically decidable: the intended text is known, and the transcript either matches or it does not. All eight clips in this project score **1.000**.
 
 **3. Duration as an information channel**
 
@@ -172,20 +176,21 @@ Full template: [`assets/voice-alerts.config.json`](assets/voice-alerts.config.js
 | `scenes.<scene>.enabled` | `true` | Turn a single scene off |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | A match means "waiting for you"; override if DSH renames a tool |
+| `watchApprovals` | `true` | Whether an approval request is spoken (only reachable under the `ask` policy) |
 | `clipsDir` | `null` | Extra clip directory, highest precedence |
 
 ## Commands
 
 | Command | Effect |
 |---|---|
-| `/voice-alerts` | Play all seven in sequence |
+| `/voice-alerts` | Play all eight in sequence |
 | `/voice-alerts on` / `off` | Toggle immediately (writes back to the config file) |
 | `/voice-alerts status` | Show the detected player and whether every scene has audio |
 | `/voice-alerts test <scene>` | Play one scene, to check whether an event fires at all |
 
 ## Using your own voice
 
-You do not have to use the seven bundled clips. The full flow:
+You do not have to use the eight bundled clips. The full flow:
 
 ```powershell
 # 1. Edit assets/clips.json: lines under clips.<scene>.text, voice under model/voice/instruction
@@ -280,11 +285,17 @@ path, which usually pinpoints the cause immediately.
 
 | Layer | Status |
 |---|---|
-| **Events** | 6 of the 7 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked` |
-| **Audio** | All 7 clips passed the quality gate (ASR similarity 1.000, all dimensions met, no clipping) and were individually confirmed by ear to play through completely |
+| **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
+| **Audio** | All 8 clips passed the quality gate (ASR similarity 1.000, all dimensions met, no clipping) and were individually confirmed by ear to play through completely |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
-| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **41 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, and asset resolution order |
-| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 14 clips present, **the PowerShell backend still detected with no ffplay**, the 41-check suite, and the privacy scan |
+| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **43 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, and asset resolution order |
+| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 16 clips present, **the PowerShell backend still detected with no ffplay**, the 43-check suite, and the privacy scan |
+
+On the `approval` scene specifically: it can only fire under the `ask` approval policy, and
+although it was heard on a real approval request, **which of the two paths delivered it is
+unresolved** — the `approval/asked` session event and the `approval/request` waterfall play
+the same clip, so hearing it does not distinguish them. The behavior of the session-event
+path (including subagent filtering) is covered by the offline suite.
 
 What CI does and does not prove is written out at the top of the workflow file — including
 the fact that **it cannot prove sound reaches a speaker**.

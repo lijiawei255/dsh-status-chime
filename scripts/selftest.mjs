@@ -51,7 +51,7 @@ process.env.DSH_HOME = SANDBOX;
 
 const SCENE_NAMES = [
   'turn-done', 'turn-error', 'needs-input', 'job-done',
-  'job-failed', 'goal-complete', 'goal-blocked',
+  'job-failed', 'goal-complete', 'goal-blocked', 'approval',
 ];
 
 function findFfmpeg() {
@@ -96,6 +96,7 @@ const sandboxConfig = {
   minIntervalMs: 500,
   coalesceMs: 100,
   waitingTools: ['ask_user_question', 'exit_plan_mode', 'my_custom_tool'],
+  watchApprovals: true,
   scenes: {},
 };
 writeFileSync(join(SANDBOX, 'voice-alerts.config.json'), JSON.stringify(sandboxConfig, null, 2), 'utf8');
@@ -236,7 +237,7 @@ check('apply() completes and logs an active line',
   infoLogs.some((l) => l.includes('[voice-alerts] active')),
   infoLogs.find((l) => l.includes('[voice-alerts] active')) ?? '(none)');
 check('a playable backend was detected', infoLogs.some((l) => /player (ffplay|powershell)/.test(l)));
-check('all 7 scenes are registered', infoLogs.some((l) => l.includes('7 scenes')));
+check('all 8 scenes are registered', infoLogs.some((l) => l.includes('8 scenes')));
 check('the isolated config was used, not the real one', infoLogs.some((l) => l.includes(SANDBOX)));
 check('the /voice-alerts command was registered', commandDef !== null && commandDef.name === 'voice-alerts');
 check('sessions / jobs / commands were all injected',
@@ -253,7 +254,7 @@ const packaged = await commandDef.handler({ rawInput: 'status' });
 const missingScenes = SCENE_NAMES.filter((scene) => packaged.text.includes(`${scene}=on (missing)`));
 check('with no clipsDir set, every scene resolves from the packaged assets',
   packaged.kind === 'success' && missingScenes.length === 0,
-  missingScenes.length ? `missing: ${missingScenes.join(', ')}` : 'all 7 found in assets/clips');
+  missingScenes.length ? `missing: ${missingScenes.join(', ')}` : 'all 8 found in assets/clips');
 rewriteSandboxConfig({ clipsDir: PLAY ? REAL_CLIPS : SILENT_CLIPS });
 await sleep(60);
 
@@ -316,6 +317,21 @@ for (const op of ['create', 'edit', 'pause', 'resume']) {
   await sleep(QUIET);
   check(`goal/change ${op} stays silent`, chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
 }
+
+// ── approval requests ────────────────────────────────────────────────────
+// `approval/asked` is the session-stream event raised under the `ask` policy,
+// and the reliable path; `approval/request` is only a fallback.
+mark = markNow();
+fireChild('sessions', 'session/event', { header: { id: 's-approval', origin: 'root' } },
+  { type: 'approval/asked', data: { id: 'a1' } });
+await sleep(QUIET);
+check('approval/asked -> approval', chosenSinceMark(mark).includes('approval'), chosenSinceMark(mark).join(',') || 'none');
+
+mark = markNow();
+fireChild('sessions', 'session/event', { header: { id: 's-approval-sub', origin: 'subagent' } },
+  { type: 'approval/asked', data: { id: 'a2' } });
+await sleep(QUIET);
+check('an approval in a subagent session stays silent', chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
 
 // ── background jobs ──────────────────────────────────────────────────────
 mark = markNow();

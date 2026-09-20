@@ -83,7 +83,7 @@ Do not report success before this restart happens. Say explicitly:
 
 > Installation is done. Please fully quit and reopen DSH Desktop — the plugin only loads at
 > startup. After restarting, run `/voice-alerts status` in the chat box; you should see
-> `Voice alerts: on (v0.1.0)`.
+> `Voice alerts: on (v0.2.0)`.
 
 Only the config file (`$DSH_HOME/voice-alerts.config.json`) is hot-read. The plugin code is
 not.
@@ -92,7 +92,7 @@ not.
 
 Ask the user what `/voice-alerts status` prints, or check the log.
 
-Expected: `Voice alerts: on` and `Scenes (7)` with every scene marked `on` and none marked
+Expected: `Voice alerts: on` and `Scenes (8)` with every scene marked `on` and none marked
 `(missing)`.
 
 To let the user hear it immediately:
@@ -106,7 +106,7 @@ plays all seven clips in sequence.
 ## Step 5 — Confirm it actually reaches the speakers
 
 The clip can play while the user hears nothing. Before declaring success, ask them to
-confirm they heard the seven clips. If they heard nothing, the most likely cause is the
+confirm they heard the eight clips. If they heard nothing, the most likely cause is the
 **Windows volume mixer muting `ffplay` or `powershell.exe` individually** — see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
