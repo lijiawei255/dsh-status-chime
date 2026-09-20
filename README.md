@@ -137,7 +137,7 @@ python tools/qw_local_omni.py preview/a.mp3 preview/b.mp3 preview/c.mp3 `
 python tools/qw_local_asr.py assets/clips/turn-error.mp3 --lang zh
 ```
 
-这条是**可以当硬门槛的客观指标**：文案是已知的，转写对不对是机械可判的。本项目 7 条音频的相似度都是 **1.000**。
+这条是**可以当硬门槛的客观指标**：文案是已知的，转写对不对是机械可判的。本项目 8 条音频的相似度都是 **1.000**。
 
 **3. 时长梯度作为信息编码**
 
