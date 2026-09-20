@@ -48,6 +48,51 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 
 Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) page, where they can be played directly.
 
+## Two languages: Chinese (default) and English
+
+**One package ships both sets** — all eight scenes in Chinese and in English. Switching does not require reinstalling. The default is Chinese.
+
+```
+/voice-alerts lang        # show the current language
+/voice-alerts lang en     # switch to English
+/voice-alerts lang zh     # back to Chinese
+```
+
+The switch is written back to the config file (the `language` field), so it survives a restart. You can also just edit the config:
+
+```json
+{ "language": "en" }
+```
+
+### The English lines are rewritten, not translated
+
+This matters, because it goes to the core of the design.
+
+A literal translation of the Chinese runs long and flat in English, and **clip length is the only channel this plugin has for conveying urgency**. Once the English lengths drift, judging "do I need to go over there" from the sound alone stops working. So the eight English lines were rewritten for English rather than translated:
+
+| Scene | Chinese | English |
+|---|---|---|
+| `turn-done` | 任务完成。 | Turn complete. |
+| `needs-input` | 需要你回答。 | Waiting for your answer. |
+| `goal-complete` | 目标已完成。 | The goal is complete. |
+| `job-done` | 后台任务完成。 | The background job has finished. |
+| `approval` | 有操作等待你批准。 | An action is waiting for your approval. |
+| `goal-blocked` | 目标受阻，需要你介入处理后才能继续。 | The goal is blocked. It needs you before it can continue. |
+| `job-failed` | 后台任务失败，请回到 DSH 查看详情。 | The background job failed, and it needs your attention. Check DSH for details. |
+| `turn-error` | 任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。 | The turn failed, so this round did not finish. Open DSH to see the error details, then try again. |
+
+The English durations run **1.92s → 7.90s**, monotonic in the same severity order as the Chinese, with **every adjacent pair at least 22% apart**, so urgency is still readable from length alone in English.
+
+> ⚠️ One trap worth recording: the English `turn-error` started at 16 words / 6.55s while `job-failed` was 6.46s — a 0.10s gap, **inaudible**. The Chinese pair differs by 2.02s (34%). Lengthening the English error line to 19 words restored a 1.44s gap. **If you edit the copy, re-measure the durations** rather than trusting the word count.
+
+The English set uses `loongmary` (a warm British voice) rather than having the Chinese voice read English. Three candidates were auditioned and ranked; the Chinese voice reading English was described as noticeably synthetic with unnatural rhythm (naturalness 5/10) and placed last in two independent ranking runs.
+
+`/voice-alerts status` lists each language's clip availability:
+
+```
+Clip sets: zh (active): all clips present  |  en: all clips present
+```
+
 ## Install
 
 ### Option 1: hand it to your agent (recommended)
@@ -81,7 +126,7 @@ In the chat box, run:
 /voice-alerts status
 ```
 
-If you see `Voice alerts: on (v0.2.0)` and `Scenes (8)`, the install worked. To hear all eight:
+If you see `Voice alerts: on (v0.3.0)` and `Scenes (8)`, the install worked. To hear all eight:
 
 ```
 /voice-alerts
@@ -176,6 +221,7 @@ Full template: [`assets/voice-alerts.config.json`](assets/voice-alerts.config.js
 | `scenes.<scene>.enabled` | `true` | Turn a single scene off |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | A match means "waiting for you"; override if DSH renames a tool |
+| `language` | `"zh"` | Spoken language: `zh` / `en`. An unrecognised value falls back to `zh` rather than going silent |
 | `watchApprovals` | `true` | Whether an approval request is spoken (only reachable under the `ask` policy) |
 | `clipsDir` | `null` | Extra clip directory, highest precedence |
 
@@ -183,9 +229,10 @@ Full template: [`assets/voice-alerts.config.json`](assets/voice-alerts.config.js
 
 | Command | Effect |
 |---|---|
-| `/voice-alerts` | Play all eight in sequence |
+| `/voice-alerts` | Play all eight in sequence (in the current language) |
 | `/voice-alerts on` / `off` | Toggle immediately (writes back to the config file) |
-| `/voice-alerts status` | Show the detected player and whether every scene has audio |
+| `/voice-alerts lang <zh\|en>` | Switch the spoken language; written back to the config |
+| `/voice-alerts status` | Show the detected player and whether every scene has audio in each language |
 | `/voice-alerts test <scene>` | Play one scene, to check whether an event fires at all |
 
 ## Using your own voice
@@ -286,10 +333,11 @@ path, which usually pinpoints the cause immediately.
 | Layer | Status |
 |---|---|
 | **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
-| **Audio** | All 8 clips passed the quality gate (ASR similarity 1.000, all dimensions met, no clipping) and were individually confirmed by ear to play through completely |
+| **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the quality gate (ASR similarity 1.000, all dimensions met, no clipping) and were individually confirmed by ear to play through completely |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
-| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **43 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, and asset resolution order |
-| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 16 clips present, **the PowerShell backend still detected with no ffplay**, the 43-check suite, and the privacy scan |
+| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **50 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, and language switching with its fallback |
+| **Language** | Chinese is the default; after `lang en` the plugin genuinely resolves the English **file** (the test asserts on the resolved filename, not just the status text); an unrecognised language in the config falls back to Chinese instead of going silent |
+| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 50-check suite, and the privacy scan |
 
 On the `approval` scene specifically: it can only fire under the `ask` approval policy, and
 although it was heard on a real approval request, **which of the two paths delivered it is
@@ -316,7 +364,7 @@ The scene is **kept** (it does work for tool-task failures), but its trigger **h
 dsh-status-chime/
 ├── lib/index.js                  # the plugin; the only runtime code
 ├── assets/
-│   ├── clips/                    # 8 clips, each as mp3 + wav
+│   ├── clips/                    # 8 scenes x 2 languages = 16 clips, each as mp3 + wav
 │   ├── clips.json                # single source of truth for lines, voice and settings
 │   ├── voice-alerts.config.json  # config template
 │   └── play.ps1                  # PowerShell fallback player (pure ASCII; see the file header)

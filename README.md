@@ -49,6 +49,51 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
 见 [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) 页面的音频附件。
 
+## 两种语言：中文（默认）和英文
+
+**同一套安装包，八条场景各带中英两版音频**，来回切换不需要重装。默认是中文。
+
+```
+/voice-alerts lang        # 看当前语言
+/voice-alerts lang en     # 切到英文
+/voice-alerts lang zh     # 切回中文
+```
+
+切换会写回配置文件（`language` 字段），重启后仍然生效。也可以直接改配置：
+
+```json
+{ "language": "en" }
+```
+
+### 英文不是翻译，是重写的
+
+这一点值得说明，因为它关系到这个插件的核心设计。
+
+中文原文直译成英文会变长、变平，而**「时长 = 紧急度」正是这个插件唯一的信息载体** —— 一旦英文长度失控，光凭声音长短判断要不要过去就失效了。所以英文八条是按英语语境**重写**的，不是逐句翻译：
+
+| 场景 | 中文 | 英文 |
+|---|---|---|
+| `turn-done` | 任务完成。 | Turn complete. |
+| `needs-input` | 需要你回答。 | Waiting for your answer. |
+| `goal-complete` | 目标已完成。 | The goal is complete. |
+| `job-done` | 后台任务完成。 | The background job has finished. |
+| `approval` | 有操作等待你批准。 | An action is waiting for your approval. |
+| `goal-blocked` | 目标受阻，需要你介入处理后才能继续。 | The goal is blocked. It needs you before it can continue. |
+| `job-failed` | 后台任务失败，请回到 DSH 查看详情。 | The background job failed, and it needs your attention. Check DSH for details. |
+| `turn-error` | 任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。 | The turn failed, so this round did not finish. Open DSH to see the error details, then try again. |
+
+英文版的时长梯度是 **1.92s → 7.90s**，与中文**同样单调**（同样按严重度递增），且**相邻两条至少相差 22%**，所以英文下也能靠长短分辨紧急程度。
+
+> ⚠️ 这里踩过一个坑，记下来：英文 `turn-error` 最初只有 16 个词、6.55s，而 `job-failed` 是 6.46s —— 只差 0.10s，**耳朵根本分不出来**。中文那边两者差 2.02s（34%）。后来把英文错误文案加长到 19 个词，才恢复到 7.90s / 1.44s 的差距。**如果你改文案，记得重新量一遍时长**，别只看中文字数。
+
+英文用的音色是 `loongmary`（温暖英音），**不是让中文音色去读英文**。试听过三个候选并做了排序，中文音色读英文被评为「明显合成感、节奏不自然」（自然度 5/10），两次独立排序都排最后。
+
+`/voice-alerts status` 会同时列出两种语言各自的音频是否齐备：
+
+```
+Clip sets: zh (active): all clips present  |  en: all clips present
+```
+
 ## 安装
 
 ### 方式一：交给你的 Agent（推荐）
@@ -82,7 +127,7 @@ dsh plugin --profile desktop add .\dsh-status-chime
 /voice-alerts status
 ```
 
-看到 `Voice alerts: on (v0.2.0)` 和 `Scenes (8)` 就说明装好了。想听一遍全部八条：
+看到 `Voice alerts: on (v0.3.0)` 和 `Scenes (8)` 就说明装好了。想听一遍全部八条：
 
 ```
 /voice-alerts
@@ -176,6 +221,7 @@ scripts/qa.mjs clips          全部质检过关
 | `scenes.<场景>.enabled` | `true` | 单独关掉某个场景 |
 | `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
 | `waitingTools` | `["ask_user_question","exit_plan_mode"]` | 命中即视为「在等你回答」；DSH 若改工具名可在此覆盖 |
+| `language` | `"zh"` | 语音语言：`zh` / `en`；无法识别的值回退到 `zh`（不会静默） |
 | `watchApprovals` | `true` | 审批请求是否出声（只在策略为 `ask` 时可能触发） |
 | `clipsDir` | `null` | 自定义音频目录，优先级最高 |
 
@@ -183,9 +229,10 @@ scripts/qa.mjs clips          全部质检过关
 
 | 命令 | 作用 |
 |---|---|
-| `/voice-alerts` | 依次播放全部八条 |
+| `/voice-alerts` | 依次播放全部八条（当前语言） |
 | `/voice-alerts on` / `off` | 立即开关（会写回配置文件） |
-| `/voice-alerts status` | 看播放器探测结果、各场景音频是否齐备 |
+| `/voice-alerts lang <zh\|en>` | 切换语音语言，写回配置 |
+| `/voice-alerts status` | 看播放器探测结果、各语言各场景音频是否齐备 |
 | `/voice-alerts test <场景>` | 只播一条，用来排查某类事件有没有触发 |
 
 ## 换成你自己的声音
@@ -274,10 +321,11 @@ node scripts/qa.mjs clips                # 质检
 | 层级 | 状态 |
 |---|---|
 | **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
-| **音频层** | 8 条全部通过质检（ASR 相似度 1.000、四维达标、无削波），且逐条耳听确认真实播放完整 |
+| **音频层** | 中英各 8 条、共 16 条全部通过质检（ASR 相似度 1.000、四维达标、无削波） |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
-| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**43 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序 |
-| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、16 个音频齐备、**无 ffplay 时 PowerShell 后端仍被探测到**、43 项自检、隐私扫描 |
+| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**50 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、以及语言切换与回退 |
+| **语言层** | 默认中文、`lang en` 切换后确实改选英文文件（自测断言的是**解析到的文件名**，不只是状态文字）；配置里写无法识别的语言会**回退到中文**而不是静默 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、50 项自检、隐私扫描 |
 
 关于 `approval` 的验证要说清楚边界：**触发时审批策略必须是 `ask`**。我本人是在 `ask` 策略下听到提示音的，但当时**无法区分**它走的是会话事件 `approval/asked` 还是兜底的作用域瀑布 `approval/request` —— 两条路径播同一条音。会话事件那条的**行为**由自检覆盖（含「子代理会话的审批不出声」），但它是否在生产环境中被派发，我没有单独取证过。
 
@@ -299,7 +347,7 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 dsh-status-chime/
 ├── lib/index.js                  # 插件主体，唯一运行时代码
 ├── assets/
-│   ├── clips/                    # 8 条音频，每条 mp3 + wav
+│   ├── clips/                    # 8 场景 × 2 语言 = 16 条音频，每条 mp3 + wav
 │   ├── clips.json                # 文案/音色/参数的唯一事实源
 │   ├── voice-alerts.config.json  # 配置模板
 │   └── play.ps1                  # PowerShell 回退播放器（纯 ASCII，原因见文件头）

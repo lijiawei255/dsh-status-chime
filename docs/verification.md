@@ -45,17 +45,44 @@ How the two harder ones were triggered:
 
 ## 2. Audio layer
 
-All eight clips were synthesized through Bailian TTS, normalised with `ffmpeg loudnorm`, and
-passed the quality gate in `scripts/qa.mjs clips`:
+Both language sets were synthesized through Bailian TTS, normalised with `ffmpeg loudnorm`,
+and passed the quality gate (`scripts/qa.mjs clips --lang zh|en`):
 
 | Check | Result |
 |---|---|
-| ASR character similarity against the intended line | **1.000 on all eight** |
-| Clarity, cleanliness (hard gates) | 10 / 10 on all eight |
+| ASR character similarity against the intended line | **1.000 on all 16 clips** |
+| Clarity, cleanliness (hard gates) | 10 / 10 on all 16 clips |
 | Peak level, no clipping | between −4.2 dB and −1.9 dB |
-| Duration gradient preserved | 7.97 / 5.95 / 4.78 / 2.59 / 2.16 / 2.09 / 1.58 s |
+| Chinese duration gradient | 7.97 / 5.95 / 4.78 / 3.00 / 2.59 / 2.16 / 2.09 / 1.58 s |
+| English duration gradient | 7.90 / 6.46 / 4.85 / 3.00 / 2.59 / 2.16 / 2.09 / 1.92 s |
 
-A human also listened to all eight and confirmed each one played through completely.
+The English gradient is monotonic in the same severity order as the Chinese, and every
+adjacent pair is at least 22% apart, so urgency remains readable from clip length alone.
+
+An earlier English `turn-error` was 6.55 s against a 6.46 s `job-failed` — a 0.10 s gap that
+no listener could resolve, where the Chinese pair differs by 2.02 s (34%). The line was
+lengthened and re-measured to 7.90 s. **Word counts are not a proxy for duration; the
+durations are what was checked.**
+
+A human also listened to all eight Chinese clips and confirmed each played through
+completely. The English set has **not** had that listening pass — it passed the automated
+gate only.
+
+## 2b. Language layer
+
+| Claim | How it was checked |
+|---|---|
+| Chinese is the default | `clips.json` `defaultLanguage` is `zh`; the bare `<scene>.mp3` name is what resolves with no config |
+| `/voice-alerts lang en` selects English | The offline suite asserts the **resolved filename** ends in `.en.mp3`, not merely that the status text changed |
+| The switch survives a restart | `lang en` writes `language` into the config file; the suite re-reads the file and asserts the value |
+| An unknown language does not mute the plugin | Setting `language: "klingon"` falls back to Chinese; asserted via `status` |
+| An unknown language is rejected on the command | `/voice-alerts lang klingon` returns an error naming the allowed values |
+| The English voice is a native English voice | Three candidates were ranked; two independent runs both placed `loongmary` first and the Chinese voice reading English last |
+
+**Not verified:** that a missing English clip warns rather than silently falling back. The
+shipped package always contains the English set, and packaged assets are the last link in
+the resolution chain, so the branch cannot be reached without renaming shipped files — a
+worse test than the gap it would close.
 
 ## 3. Backend layer
 
@@ -124,7 +151,7 @@ Worth recording because it affects how you develop and install this plugin:
 
 ## 7. What is covered by the offline suite
 
-`scripts/selftest.mjs` runs 43 checks against a mock cordis context, with no restart and no
+`scripts/selftest.mjs` runs 50 checks against a mock cordis context, with no restart and no
 real event required. It covers: the eight scene mappings, the four silent goal operations,
 subagent filtering, autonomous-round handling, coalescing and priority, per-scene
 throttling, all four `/voice-alerts` verbs, command-name collision handling, asset

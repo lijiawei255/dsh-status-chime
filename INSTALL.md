@@ -83,7 +83,7 @@ Do not report success before this restart happens. Say explicitly:
 
 > Installation is done. Please fully quit and reopen DSH Desktop — the plugin only loads at
 > startup. After restarting, run `/voice-alerts status` in the chat box; you should see
-> `Voice alerts: on (v0.2.0)`.
+> `Voice alerts: on (v0.3.0)`.
 
 Only the config file (`$DSH_HOME/voice-alerts.config.json`) is hot-read. The plugin code is
 not.
@@ -92,8 +92,15 @@ not.
 
 Ask the user what `/voice-alerts status` prints, or check the log.
 
-Expected: `Voice alerts: on` and `Scenes (8)` with every scene marked `on` and none marked
-`(missing)`.
+Expected: `Voice alerts: on`, `Language: zh`, and `Scenes (8)` with every scene marked `on`
+and none marked `(missing)`. The `Clip sets` line should show both languages complete:
+
+```
+Clip sets: zh (active): all clips present  |  en: all clips present
+```
+
+Both languages ship in the package, so nothing has to be downloaded. Chinese is the
+default; switch with `/voice-alerts lang en` (written back to the config, so it sticks).
 
 To let the user hear it immediately:
 
@@ -101,7 +108,7 @@ To let the user hear it immediately:
 /voice-alerts
 ```
 
-plays all eight clips in sequence.
+plays all eight clips in sequence, in the current language.
 
 ## Step 5 — Confirm it actually reaches the speakers
 

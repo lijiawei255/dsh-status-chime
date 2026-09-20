@@ -12,7 +12,7 @@ Search it for `voice-alerts`. What you find there splits the problem in half imm
 
 | Log line | Meaning |
 |---|---|
-| `[voice-alerts] active v0.2.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
+| `[voice-alerts] active v0.3.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
 | `playing <scene>` | The plugin started a player for that scene. If you still hear nothing, see **2** and **3**. |
 | `no audio for <scene>` | The clip file is missing. See **6**. |
 | `throttled <scene>` | The repeat-suppression window caught it. Normal behaviour. |
@@ -27,7 +27,7 @@ running DSH Desktop. You must fully quit and reopen the application.
 
 Check by running `/voice-alerts status` in the chat box:
 
-- `Voice alerts: on (v0.2.0)` → the new code is loaded.
+- `Voice alerts: on (v0.3.0)` → the new code is loaded.
 - Unknown command → the plugin is not loaded at all. Restart, and check for the
   `[voice-alerts] active` line in the log afterwards.
 
@@ -184,6 +184,45 @@ dsh plugin --profile desktop add -w <package>
 
 Note that this is a pnpm/DSH interaction, not a defect in this plugin: the same command
 fails for any package.
+
+## 12. `build.mjs` regenerated the bundled clips when I only meant to look
+
+An older copy of this repository defaulted a bare `node scripts/build.mjs` to the build
+mode, so running it to see what the tool does triggered a real synthesis run and
+**overwrote every file in `assets/clips/`**, including the ones committed to the repo.
+There was no help text and no confirmation.
+
+Fixed: a bare invocation now prints usage and generates nothing. If you are on an older
+clone, either update, or use `git checkout assets/clips` to restore the shipped audio.
+
+## 13. I switched to English (or Chinese) and some scenes went silent
+
+```
+/voice-alerts status
+```
+
+Look at the `Clip sets` line:
+
+```
+Clip sets: zh (active): all clips present  |  en: missing turn-done, job-failed
+```
+
+Both languages ship in the package, so a missing set usually means someone generated a
+partial set into `$DSH_HOME/voice-alerts/clips/`, or is running an old version from before
+the second language existed.
+
+Resolution order is per file: config `clipsDir`, then `$DSH_HOME/voice-alerts/clips/`, then
+the packaged `assets/clips/`. A file present in your user directory **shadows** the packaged
+one, so a stale or half-generated override can hide a good packaged clip. Remove the
+offending user file, or regenerate with:
+
+```powershell
+node scripts/build.mjs build --lang en
+```
+
+Also note that a `language` value that is not `zh` or `en` **falls back to Chinese** rather
+than muting the plugin, so a typo in the config looks like "my English setting did nothing"
+— check the `Language:` line in `status` rather than assuming the setting took.
 
 ## Still stuck?
 

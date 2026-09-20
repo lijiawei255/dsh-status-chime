@@ -4,7 +4,25 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] — 2026-09-21
+
+### Added
+
+- **English spoken alerts.** All eight scenes now ship in Chinese and English in the
+  same package, selected with the `language` setting or `/voice-alerts lang <zh|en>`.
+  Chinese remains the default.
+- The English lines are **written for English, not translated**. A literal rendering
+  of the Chinese runs long and flat, and clip length is the only channel this plugin
+  has for conveying urgency, so the English set was rewritten to preserve it. English
+  durations run 1.92s to 7.90s, monotonic in the same severity order as the Chinese,
+  with every adjacent pair at least 22% apart.
+- English uses a native English voice (`loongmary`, warm British) rather than the
+  Chinese voice reading English, which was auditioned and ranked last of three for
+  sounding noticeably synthetic.
+- `build.mjs` and `qa.mjs` understand languages: `--lang <code>` restricts either to
+  one language, and `audition` picks the audition line for the candidate's language.
+- `/voice-alerts status` reports clip availability per language, so a missing English
+  set is visible rather than showing up as unexplained silence.
 
 ### Changed
 
@@ -12,10 +30,15 @@ uses [Semantic Versioning](https://semver.org/).
   away from an unrelated plugin already listed in the community catalog
   (`dsh-voice-alert`), and the marketplace hides one of two same-named packages, so the
   collision was a real discoverability risk. The new name also leads with "status" rather
-  than "voice", which matches what the plugin actually reports.
-- The change is **package-level only**: the cordis `id` stays `voice-alerts`, the slash
-  command stays `/voice-alerts`, and the config and clip paths under `$DSH_HOME` are
-  untouched. An existing install keeps working; only the npm/GitHub name changes.
+  than "voice", which matches what the plugin actually reports. The rename is
+  **package-level only**: the cordis `id` stays `voice-alerts`, the slash command stays
+  `/voice-alerts`, and the config and clip paths under `$DSH_HOME` are untouched, so an
+  existing install keeps working.
+- Clips for a non-default language use a `<scene>.<code>.mp3` filename. The default
+  language keeps the bare `<scene>.mp3` name, so an existing install and any
+  hand-placed user override keep working untouched.
+- An unrecognised `language` value falls back to the default rather than resolving no
+  clips at all — a typo should not be indistinguishable from a broken install.
 
 ## [0.2.0] — 2026-09-21
 
