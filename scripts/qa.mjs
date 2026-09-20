@@ -274,15 +274,32 @@ function previewTargets() {
     .map((f) => ({ id: `preview-${basename(f, '.mp3')}`, file: join(PREVIEW_DIR, f), expected: config.auditionText }));
 }
 
-function clipTargets() {
-  return Object.keys(config.clips)
-    .map((scene) => {
-      const file = join(CLIPS_DIR, `${scene}.mp3`);
-      return existsSync(file)
-        ? { id: scene, file, expected: config.clips[scene].expect ?? config.clips[scene].text }
-        : null;
-    })
-    .filter(Boolean);
+/**
+ * Every language declared in clips.json, default first.
+ *
+ * Clips for a non-default language are stored as `<scene>.<code>.mp3`, so the
+ * quality gate has to walk the language list rather than one flat scene list.
+ */
+const DEFAULT_LANGUAGE = config.defaultLanguage ?? 'zh';
+function allLanguages() {
+  return [DEFAULT_LANGUAGE, ...Object.keys(config.languages ?? {}).filter((c) => c !== DEFAULT_LANGUAGE)];
+}
+
+function clipTargets(onlyLanguage) {
+  const targets = [];
+  for (const code of (onlyLanguage ? [onlyLanguage] : allLanguages())) {
+    for (const scene of Object.keys(config.clips)) {
+      const base = code === DEFAULT_LANGUAGE ? scene : `${scene}.${code}`;
+      const file = join(CLIPS_DIR, `${base}.mp3`);
+      if (!existsSync(file)) continue;
+      const spec = config.clips[scene];
+      const copy = code === DEFAULT_LANGUAGE ? spec : spec[code];
+      const expected = copy?.expect ?? copy?.text;
+      if (expected === undefined) continue;
+      targets.push({ id: base, file, expected });
+    }
+  }
+  return targets;
 }
 
 // ── rank: hand every candidate to Omni at once ────────────────────────────
@@ -352,7 +369,7 @@ if (mode === 'rank') {
 const targets = mode === 'preview'
   ? previewTargets()
   : mode === 'clips'
-    ? clipTargets()
+    ? clipTargets(argValue('--lang'))
     : mode === 'file'
       ? (() => {
         const file = positional(0, REPORT_FLAGS);
