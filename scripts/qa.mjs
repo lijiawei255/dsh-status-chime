@@ -2,24 +2,47 @@
 /**
  * qa.mjs — audio quality gate for the alert clips.
  *
- * Three checks per clip, all through Alibaba Cloud Bailian:
+ * Checks per clip:
  *   1. Intelligibility (ASR)  tools/qw_local_asr.py transcribes it; the transcript
  *      is compared against the intended line by character similarity.
  *   2. Listening quality (Omni)  tools/qw_local_omni.py rates clarity, naturalness,
  *      voice character and cleanliness, and describes the most obvious defect.
- *   3. Technical (ffmpeg)  ffprobe for duration/sample rate/channels, plus a
- *      volumedetect pass to confirm nothing is clipping.
+ *   3. Technical (ffmpeg)  ffprobe for duration/sample rate/channels, volumedetect
+ *      for peak and mean level, silencedetect for the net speaking time.
+ *   4. Naturalness (UTMOS)  tools/qw_local_utmos.py predicts a MOS. Optional: a
+ *      missing install is reported, never failed.
  *
  * Two tiers of gate, and the split is deliberate
  *   HARD (a failure is a failure): ASR similarity, clarity, cleanliness, peak level,
- *     and any call error.
+ *     the silence floors, and any call error.
  *   ADVISORY (recorded, never failing): naturalness, voice character, maturity,
- *     suitability, and the defect note.
+ *     suitability, the defect note, net speech rate, and UTMOS.
  *   Why: the subjective dimensions belong to a human's ears. Treating an LLM's
  *   subjective score as a hard gate breaks down in practice — the same clip scored
  *   "naturalness 6, character 4" on one run and "naturalness 9, character 7" on the
  *   next, and four clearly different clips once received identical scores. So the
  *   objective measurements gate the build and the subjective ones inform the choice.
+ *
+ * Why the silence floors exist
+ *   The peak-level check only catches clipping, so a clip of pure silence passed
+ *   every gate as long as the file had a plausible length — which is one of the
+ *   classic TTS failure modes. Measured on the shipped clips, healthy audio peaks at
+ *   -4.2..-1.9 dB and averages -20.6..-16.6 dB, while a fully silent file measures
+ *   -91 dB. The floors sit about 25 dB below every real clip and far above silence.
+ *
+ * Why speech rate is advisory and per-batch
+ *   A fixed band does not work here: the Chinese clips deliberately speak slowly
+ *   (rate 0.95), and the 3.2-5.5 units/s band from human broadcast-speech research
+ *   would fail seven of the eight. What matters for this project is consistency,
+ *   because clip length carries the urgency, so each clip is compared against the
+ *   median of its own language. Very short clips are exempt: a two-word clip has a
+ *   rate too noisy to judge, and flagging it would be a false positive.
+ *
+ * Why UTMOS is compared per language
+ *   Every English clip scores above every Chinese clip (4.38-4.51 against
+ *   3.75-4.28). The predictor prefers the native-English voice, so a cross-language
+ *   comparison would read as a defect in the Chinese set. Only the deviation from
+ *   the same language's median is meaningful.
  *
  * Why not `bl speech recognize` / `bl omni` directly
  *   The Bailian CLI resolves its upload policy against a fixed endpoint, which fails
@@ -28,14 +51,16 @@
  *
  * Usage
  *   node scripts/qa.mjs preview          # check preview/*.mp3 against auditionText
- *   node scripts/qa.mjs clips            # check assets/clips/*.mp3 against clips.json
+ *   node scripts/qa.mjs clips            # check every language's clips
  *   node scripts/qa.mjs rank             # send every preview clip to Omni at once, for a ranking
  *   node scripts/qa.mjs file <path> [expected text]
  *
  * Options
  *   --root <dir>          project root (defaults to the repository this script lives in)
  *   --report <path>       where to write report.md (default <root>/qa/report.md)
+ *   --lang <code>         clips mode: check only this language
  *   VOICE_ALERTS_FFMPEG   explicit ffmpeg path; otherwise ffmpeg comes from PATH
+ *   VOICE_ALERTS_UTMOS_PYTHON  interpreter that has utmos-pytorch; defaults to PYTHON
  */
 
 import { spawnSync } from 'node:child_process';
@@ -68,6 +93,31 @@ const SIMILARITY_THRESHOLD = 0.9;
 const HARD_DIMENSIONS = ['clarity', 'cleanliness'];
 const HARD_DIMENSION_THRESHOLD = 7;
 const ADVISORY_DIMENSIONS = ['naturalness', 'character', 'maturity'];
+
+/**
+ * Silence floors, in dB.
+ *
+ * Measured on the shipped clips: peak -4.2..-1.9 dB, mean -20.6..-16.6 dB, and a
+ * fully silent file at -91 dB. These sit well clear of both sides.
+ */
+const SILENCE_PEAK_FLOOR_DB = -30;
+const SILENCE_MEAN_FLOOR_DB = -35;
+
+/**
+ * Net speech rate advisory.
+ *
+ * Deliberately not a fixed band: the clips are synthesized slowly on purpose, so
+ * the broadcast-speech range would fail most of them. Deviation from the batch
+ * median is what is meaningful.
+ */
+const RATE_OUTLIER_FRACTION = 0.25;
+/** Below this many units the rate is too noisy to judge - a 2-word clip varies wildly. */
+const RATE_MIN_UNITS = 5;
+/** Absolute plausibility, wide enough to catch a real failure rather than a style. */
+const RATE_IMPLAUSIBLE = { zh: [1.0, 6.0], en: [0.5, 4.5] };
+
+/** UTMOS is advisory, and flagged only against the median of the same language. */
+const UTMOS_MEDIAN_MARGIN = 0.5;
 
 const OMNI_PROMPT = [
   'You are a strict reviewer of voice-over quality for a short computer status alert.',
@@ -218,16 +268,35 @@ function technical(file) {
   const vol = probe(ffmpeg, ['-hide_banner', '-nostats', '-i', file, '-af', 'volumedetect', '-f', 'null', '-']);
   const peak = /max_volume:\s*(-?[\d.]+) dB/.exec(vol.stderr ?? '')?.[1];
   const mean = /mean_volume:\s*(-?[\d.]+) dB/.exec(vol.stderr ?? '')?.[1];
+  // Silence is what makes a "net" speech rate possible: units per second of
+  // actual speech, rather than units per second including the pauses.
+  const sil = probe(ffmpeg, ['-hide_banner', '-nostats', '-i', file, '-af',
+    'silencedetect=noise=-45dB:d=0.15', '-f', 'null', '-']);
+  let silentSeconds = 0;
+  for (const m of (sil.stderr ?? '').matchAll(/silence_duration:\s*([\d.]+)/g)) {
+    silentSeconds += Number.parseFloat(m[1]);
+  }
+  const speechSeconds = Number.isFinite(duration) ? Math.max(0, duration - silentSeconds) : null;
   return {
     seconds: Number.isFinite(duration) ? duration : null,
     sampleRate: fields.sample_rate ?? null,
     channels: fields.channels ?? null,
     peakDb: peak === undefined ? null : Number.parseFloat(peak),
     meanDb: mean === undefined ? null : Number.parseFloat(mean),
+    silentSeconds,
+    speechSeconds,
   };
 }
 
-function evaluate(file, expected, id) {
+/** Units of speech: Chinese characters, or whitespace-separated words for English. */
+function speechUnits(text, language) {
+  if (typeof text !== 'string') return null;
+  if (language === DEFAULT_LANGUAGE) return [...text].filter((c) => /[\u4e00-\u9fff]/.test(c)).length;
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length === 0 ? null : words.length;
+}
+
+function evaluate(file, expected, id, { language = DEFAULT_LANGUAGE, text = null } = {}) {
   const asr = runAsr(file);
   const omni = runOmni([file], OMNI_PROMPT);
   const tech = technical(file);
@@ -246,17 +315,34 @@ function evaluate(file, expected, id) {
   }
   if (tech.peakDb === null) failures.push('peak level unreadable');
   else if (tech.peakDb > -0.1) failures.push(`peak ${tech.peakDb} dB risks clipping`);
+  // The clipping check alone lets pure silence through, so long as the file has a
+  // plausible length. These floors are what actually catch a dead clip.
+  else if (tech.peakDb < SILENCE_PEAK_FLOOR_DB) failures.push(`peak ${tech.peakDb} dB is effectively silent`);
+  if (tech.meanDb !== null && tech.meanDb < SILENCE_MEAN_FLOOR_DB) {
+    failures.push(`mean ${tech.meanDb} dB is effectively silent`);
+  }
+
+  const units = speechUnits(text, language);
+  const rate = units !== null && tech.speechSeconds > 0 ? units / tech.speechSeconds : null;
 
   const record = {
     id,
     file,
+    language,
     expected,
+    units,
     asrTranscript: asr.transcript,
     asrSimilarity: Number(score.toFixed(4)),
     asrOk: asr.ok,
     omniRaw: omni.text ?? null,
     omni: omni.scores ?? null,
     technical: tech,
+    netRate: rate === null ? null : Number(rate.toFixed(3)),
+    // Filled in once the whole batch is known: both are judged relative to the
+    // median of the same language, which a single clip cannot provide.
+    rateOutlier: null,
+    utmos: null,
+    utmosFlag: null,
     pass: failures.length === 0,
     failures,
     asrError: asr.error,
@@ -264,6 +350,78 @@ function evaluate(file, expected, id) {
   };
   writeFileSync(join(QA_DIR, `${id}.json`), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
   return record;
+}
+
+// ── UTMOS, one model load for the whole batch ──────────────────────────────
+/**
+ * Score every clip with UTMOS.
+ *
+ * Returns null when the predictor is not installed, which the caller reports as
+ * "unavailable" rather than treating as a failed clip: regenerating audio is an
+ * occasional task, and requiring PyTorch for it would be a heavy dependency.
+ */
+function runUtmos(files) {
+  const python = process.env.VOICE_ALERTS_UTMOS_PYTHON ?? PYTHON;
+  const script = join(TOOLS_DIR, 'qw_local_utmos.py');
+  if (!existsSync(script)) return null;
+  const result = spawnSync(python, [script, ...files, '--json'], {
+    encoding: 'utf8', windowsHide: true, maxBuffer: 32 * 1024 * 1024,
+  });
+  if (result.error) return { ok: false, error: String(result.error) };
+  if (result.status !== 0) {
+    return { ok: false, error: (result.stderr ?? '').trim().split('\n').at(-1) ?? `exit ${result.status}` };
+  }
+  const line = (result.stdout ?? '').split('\n').reverse().find((l) => l.trim().startsWith('['));
+  if (line === undefined) return { ok: false, error: 'no JSON in output' };
+  try {
+    const parsed = JSON.parse(line);
+    return { ok: true, byName: new Map(parsed.map((r) => [r.name, r.utmos])) };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+/**
+ * Attach the batch-relative verdicts.
+ *
+ * Speech rate and UTMOS are only meaningful next to their peers in the same
+ * language, so they are decided here rather than per clip.
+ */
+function annotateBatch(records) {
+  const byLanguage = new Map();
+  for (const r of records) {
+    if (!byLanguage.has(r.language)) byLanguage.set(r.language, []);
+    byLanguage.get(r.language).push(r);
+  }
+  for (const [language, group] of byLanguage) {
+    const rates = group.map((r) => r.netRate).filter((v) => v !== null).sort((a, b) => a - b);
+    const median = rates.length === 0 ? null : rates[Math.floor(rates.length / 2)];
+    const [lo, hi] = RATE_IMPLAUSIBLE[language] ?? RATE_IMPLAUSIBLE[DEFAULT_LANGUAGE];
+
+    for (const r of group) {
+      if (r.netRate === null) continue;
+      if (r.netRate < lo || r.netRate > hi) {
+        r.rateOutlier = `implausible (${r.netRate.toFixed(2)} units/s outside ${lo}-${hi})`;
+      } else if (median !== null && r.units !== null && r.units >= RATE_MIN_UNITS) {
+        const deviation = (r.netRate - median) / median;
+        if (Math.abs(deviation) > RATE_OUTLIER_FRACTION) {
+          r.rateOutlier = `${deviation > 0 ? '+' : ''}${(deviation * 100).toFixed(0)}% vs ${median.toFixed(2)} median`;
+        }
+      }
+    }
+
+    const utmos = group.map((r) => r.utmos).filter((v) => typeof v === 'number').sort((a, b) => a - b);
+    if (utmos.length === 0) continue;
+    const utmosMedian = utmos[Math.floor(utmos.length / 2)];
+    for (const r of group) {
+      if (typeof r.utmos !== 'number') continue;
+      const delta = r.utmos - utmosMedian;
+      if (delta < -UTMOS_MEDIAN_MARGIN) {
+        r.utmosFlag = `${delta.toFixed(2)} below the ${utmosMedian.toFixed(2)} median`;
+      }
+    }
+  }
+  return records;
 }
 
 // ── target lists ──────────────────────────────────────────────────────────
@@ -296,7 +454,7 @@ function clipTargets(onlyLanguage) {
       const copy = code === DEFAULT_LANGUAGE ? spec : spec[code];
       const expected = copy?.expect ?? copy?.text;
       if (expected === undefined) continue;
-      targets.push({ id: base, file, expected });
+      targets.push({ id: base, file, expected, language: code, text: copy?.text ?? null });
     }
   }
   return targets;
@@ -387,12 +545,44 @@ if (targets.length === 0) {
 }
 
 const records = [];
+process.stdout.write(`evaluating ${targets.length} clip(s) ...\n`);
 for (const target of targets) {
-  process.stdout.write(`checking ${target.id} ...\n`);
-  const record = evaluate(target.file, target.expected, target.id);
+  const record = evaluate(target.file, target.expected, target.id,
+    { language: target.language, text: target.text });
   records.push(record);
+}
+
+// UTMOS is optional, and it is one model load for the whole batch rather than one
+// per clip. An unavailable predictor is reported, never treated as a failure.
+let utmosNote = null;
+const utmos = runUtmos(targets.map((t) => t.file));
+if (utmos === null) {
+  utmosNote = 'not available (tools/qw_local_utmos.py is missing)';
+} else if (!utmos.ok) {
+  utmosNote = `not available (${utmos.error})`;
+} else {
+  for (const record of records) {
+    const value = utmos.byName.get(basename(record.file));
+    if (typeof value === 'number') record.utmos = value;
+  }
+  const missing = records.filter((r) => r.utmos === null).length;
+  if (missing > 0) utmosNote = `${missing} clip(s) could not be scored`;
+}
+
+annotateBatch(records);
+
+// Report every clip, including the batch-relative verdicts, once they are known.
+for (const record of records) {
   const scores = record.omni ?? {};
+  const notes = [];
+  if (record.netRate !== null) {
+    notes.push(`rate ${record.netRate.toFixed(2)} units/s${record.rateOutlier ? ` (${record.rateOutlier})` : ''}`);
+  }
+  if (typeof record.utmos === 'number') {
+    notes.push(`UTMOS ${record.utmos.toFixed(3)}${record.utmosFlag ? ` (${record.utmosFlag})` : ''}`);
+  }
   process.stdout.write(
+    `${record.id}\n` +
     `  ${record.pass ? 'pass' : 'FAIL'}` +
     `  ASR ${record.asrSimilarity.toFixed(3)}` +
     `  clarity ${scores.clarity ?? '?'}  naturalness ${scores.naturalness ?? '?'}  character ${scores.character ?? '?'}  maturity ${scores.maturity ?? '?'}  cleanliness ${scores.cleanliness ?? '?'}` +
@@ -400,11 +590,13 @@ for (const target of targets) {
     `  peak ${record.technical.peakDb ?? '?'}dB\n` +
     `    heard: ${record.asrTranscript || '(empty)'}\n` +
     (scores.defects ? `    defect: ${scores.defects}\n` : '') +
+    (notes.length ? `    ${notes.join('  ')}\n` : '') +
     (record.failures.length ? `    failed: ${record.failures.join('; ')}\n` : '') +
     (record.asrError ? `    ASR error: ${record.asrError.split('\n').pop()}\n` : '') +
     (record.omniError ? `    Omni error: ${record.omniError.split('\n').pop()}\n` : ''),
   );
 }
+if (utmosNote !== null) process.stdout.write(`\n  UTMOS ${utmosNote}\n`);
 
 // ── report ────────────────────────────────────────────────────────────────
 const lines = [
@@ -414,19 +606,32 @@ const lines = [
   `Scope: ${mode} (${records.length} clip(s))`,
   '',
   `**Hard gates** (a miss fails the clip): ASR character similarity >= ${SIMILARITY_THRESHOLD}; ` +
-    `${HARD_DIMENSIONS.join(' / ')} >= ${HARD_DIMENSION_THRESHOLD}; peak <= -0.1 dB.`,
-  `**Advisory** (recorded, never failing): ${ADVISORY_DIMENSIONS.join(' / ')} / suitability / defect note.`,
+    `${HARD_DIMENSIONS.join(' / ')} >= ${HARD_DIMENSION_THRESHOLD}; peak <= -0.1 dB; ` +
+    `peak >= ${SILENCE_PEAK_FLOOR_DB} dB and mean >= ${SILENCE_MEAN_FLOOR_DB} dB (silence floors).`,
+  `**Advisory** (recorded, never failing): ${ADVISORY_DIMENSIONS.join(' / ')} / suitability / defect note / ` +
+    'net speech rate / UTMOS.',
   '',
-  '| clip | result | ASR | heard | clarity | naturalness | character | maturity | cleanliness | suitable | length | peak dB | defect | failed checks |',
-  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+  `Net speech rate is compared against the median of the same language, and clips below ` +
+    `${RATE_MIN_UNITS} units are exempt because their rate is too noisy to judge.`,
+  'UTMOS is compared against the median of the same language: the predictor scores every ' +
+    'English clip above every Chinese one, so a cross-language comparison would be meaningless.',
+  utmosNote === null
+    ? `UTMOS: scored ${records.filter((r) => typeof r.utmos === 'number').length}/${records.length} clip(s).`
+    : `UTMOS: ${utmosNote}.`,
+  '',
+  '| clip | lang | result | ASR | heard | clarity | naturalness | character | maturity | cleanliness | suitable | length | speech | units/s | UTMOS | peak dB | defect | failed checks |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
 ];
 for (const r of records) {
   const s = r.omni ?? {};
   lines.push(
-    `| ${r.id} | ${r.pass ? 'pass' : 'FAIL'} | ${r.asrSimilarity.toFixed(3)} | ${r.asrTranscript || '(empty)'} | ` +
+    `| ${r.id} | ${r.language} | ${r.pass ? 'pass' : 'FAIL'} | ${r.asrSimilarity.toFixed(3)} | ${r.asrTranscript || '(empty)'} | ` +
     `${s.clarity ?? '?'} | ${s.naturalness ?? '?'} | ${s.character ?? '?'} | ${s.maturity ?? '?'} | ${s.cleanliness ?? '?'} | ` +
     `${s.suitable_for_system_alert === undefined ? '?' : s.suitable_for_system_alert ? 'yes' : 'no'} | ` +
     `${r.technical.seconds === null ? '?' : r.technical.seconds.toFixed(2) + 's'} | ` +
+    `${r.technical.speechSeconds === null ? '?' : r.technical.speechSeconds.toFixed(2) + 's'} | ` +
+    `${r.netRate === null ? '?' : r.netRate.toFixed(2)}${r.rateOutlier ? ` (${r.rateOutlier})` : ''} | ` +
+    `${typeof r.utmos === 'number' ? r.utmos.toFixed(3) : '?'}${r.utmosFlag ? ` (${r.utmosFlag})` : ''} | ` +
     `${r.technical.peakDb ?? '?'} | ${String(s.defects ?? '').replace(/\|/g, '/')} | ` +
     `${r.failures.length ? r.failures.join('; ').replace(/\|/g, '/') : '-'} |`,
   );
