@@ -1,0 +1,18 @@
+# Dependencies, if you ever run a package manager here
+node_modules/
+
+# Local scratch space used by scripts/build.mjs and scripts/qa.mjs
+preview/
+tmp/
+qa/
+
+# Python bytecode from tools/*.py, easy to commit by accident
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.log

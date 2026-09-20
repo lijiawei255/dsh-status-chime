@@ -1,0 +1,53 @@
+{
+  "_comment": [
+    "dsh-voice-alerts runtime config. The plugin re-reads it by mtime, so edits apply immediately.",
+    "The shipped defaults work as-is; this file is only needed to change something.",
+    "You can also toggle alerts from chat with /voice-alerts on|off.",
+    "Spoken lines and synthesis settings live in assets/clips.json, not here."
+  ],
+
+  "enabled": true,
+
+  "_playerNote": "auto probes ffplay and falls back to Windows PowerShell. Use 'ffplay' or 'powershell' to force one.",
+  "player": "auto",
+  "_ffplayPathNote": "null means resolve ffplay from PATH; set an absolute path if it is not on PATH.",
+  "ffplayPath": null,
+  "_playPs1Note": "null means auto-detect the fallback script. Playback still works when it is missing, via an inline -EncodedCommand.",
+  "playPs1Path": null,
+  "_clipsDirNote": "Optional extra clip directory, checked before the user and packaged directories. Handy for swapping one scene.",
+  "clipsDir": null,
+
+  "_volumeNote": "0-100. Applies to ffplay only; the PowerShell player follows the system volume.",
+  "volume": 85,
+
+  "_minIntervalNote": "Repeat triggers of the same scene inside this window are dropped.",
+  "minIntervalMs": 1500,
+
+  "_coalesceNote": "Events inside this window are collapsed to the single highest-priority scene.",
+  "coalesceMs": 400,
+
+  "_interruptNote": "Whether a new alert cuts off the one playing. true keeps the most important alert audible.",
+  "interrupt": true,
+
+  "_commandNameNote": "Slash command name. A collision with another plugin loses only the command, not the alerts.",
+  "commandName": "voice-alerts",
+
+  "_waitingToolsNote": "Tool names that mean the agent is about to wait for you; they play the needs-input clip.",
+  "waitingTools": [
+    "ask_user_question",
+    "exit_plan_mode"
+  ],
+
+  "_approvalNote": "Also speak on an approval request. Only fires under the 'ask' approval policy.",
+  "watchApprovals": false,
+
+  "scenes": {
+    "turn-done": { "enabled": true },
+    "turn-error": { "enabled": true },
+    "needs-input": { "enabled": true },
+    "job-done": { "enabled": true },
+    "job-failed": { "enabled": true },
+    "goal-complete": { "enabled": true },
+    "goal-blocked": { "enabled": true }
+  }
+}

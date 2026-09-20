@@ -1,0 +1,23 @@
+# Normalise line endings in the repository.
+#
+# Without this, Git on Windows rewrites LF to CRLF on checkout, so a file can
+# differ between two clones of the same commit. That matters here for two files in
+# particular: the shell scripts and YAML read by a POSIX tool, and play.ps1, which
+# Windows PowerShell parses (it is ASCII-only precisely so that parsing is
+# predictable).
+#
+# `text=auto` normalises text files to LF in the repository and lets each platform
+# check them out in its native form.
+
+* text=auto eol=lf
+
+# Windows batch and PowerShell files are happier with CRLF on disk.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets: never touch these.
+*.mp3 binary
+*.wav binary
+*.png binary
+*.ico binary

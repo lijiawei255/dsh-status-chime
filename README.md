@@ -1,0 +1,325 @@
+# dsh-voice-alerts
+
+**[中文](README.md) | [English](README.en.md)**
+
+> 给 DeepSeek Harness 加上「会说话的状态提示」：任务跑完、出错、后台任务结束、需要你回答时，用声音告诉你，而不是只让任务栏图标闪一下。
+
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)
+![license](https://img.shields.io/badge/license-MIT-blue)
+
+---
+
+## 为什么做这个
+
+DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这类提示有一个隐含前提——**你得正在看着屏幕**。
+
+但真正需要被通知的时刻，往往正是你不在屏幕前的时候：
+
+- 一个跑了十几分钟的任务终于结束
+- 后台任务失败，而你已经切去干别的了
+- 代理停下来等你回答一个问题，却在原地等了半小时
+- 目标被卡住，需要你介入才能继续
+
+于是提示被错过，时间被浪费。**换成声音之后，「必须盯着」就变成了「听得见就行」**——你可以去泡杯茶、看会儿书、或者在另一台机器上干活。
+
+装好即用，不需要配置任何东西。
+
+## 七个场景
+
+时长是**刻意设计**的：**长 = 有事需要你，短 = 有事情结束了**。所以即使不看屏幕，光凭声音长短就能判断要不要马上过去。
+
+| 场景 | 什么时候响 | 时长 | 时长定位 |
+|---|---|---|---|
+| `turn-error` | 本轮失败，或撞到 token 上限 | **7.97s** | 最长 |
+| `job-failed` | 后台任务失败 | 5.95s | 长 |
+| `goal-blocked` | 目标受阻，需要你介入 | 4.78s | 中长 |
+| `job-done` | 后台任务完成 | 2.59s | 中 |
+| `goal-complete` | 目标整体完成（只响一次，不是每轮） | 2.16s | 短 |
+| `needs-input` | 代理停下来等你回答 | 2.09s | 短 |
+| `turn-done` | 你发起的那一轮正常结束 | 1.58s | 最短 |
+
+两条**过滤规则**值得单独说明，它们避免了这个插件变成噪音源：
+
+- **`turn-error` 不看是否由你发起**。自动续跑的回合出错，同样需要你知道。
+- **`turn-done` 只看你发起的回合**。否则一个跑 20 轮的目标会响 20 次「任务完成」。自动推进的进度由 `goal-complete` / `goal-blocked` 在**目标级别**汇报，而不是每一轮。
+
+音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
+见 [Releases](https://github.com/lijiawei255/dsh-voice-alerts/releases) 页面的音频附件。
+
+## 安装
+
+### 方式一：交给你的 Agent（推荐）
+
+把下面这句话发给你的 DSH：
+
+> 把 `https://github.com/lijiawei255/dsh-voice-alerts` 装进我的 DSH desktop profile，装完提醒我重启。
+
+仓库里有一份 [INSTALL.md](INSTALL.md)，写清了每一步该做什么。它存在的意义是：**让不同的 Agent 装出同样的结果**，而不是各自发挥。
+
+### 方式二：自己敲命令
+
+```powershell
+# 从 GitHub 直接装
+dsh plugin --profile desktop add github:lijiawei255/dsh-voice-alerts
+
+# 或者先 clone / 下载 ZIP，再指向本地目录
+git clone https://github.com/lijiawei255/dsh-voice-alerts
+dsh plugin --profile desktop add .\dsh-voice-alerts
+```
+
+这条命令会做两件事：把包装进 profile，并把包登记为一个 profile 层（前提是包里声明了 `dsh.bundle`，本仓库已经声明了）。
+
+**装完必须完全重启 DSH Desktop**，否则插件不会加载。
+
+### 重启之后
+
+在聊天框里敲：
+
+```
+/voice-alerts status
+```
+
+看到 `Voice alerts: on (v0.1.0)` 和 `Scenes (7)` 就说明装好了。想听一遍全部七条：
+
+```
+/voice-alerts
+```
+
+## 它怎么工作
+
+```
+DSH 事件  ──▶  lib/index.js  ──▶  聚合 / 节流 / 优先级  ──▶  播放器  ──▶  音频文件
+```
+
+**事件来源**（都是宿主进程里的公开事件）：
+
+| 事件 | 用途 |
+|---|---|
+| `session/event` → `turn/start` / `user/message` / `turn/end` | 判断这一轮是不是你发起的，以及它是怎么结束的 |
+| `session/event` → `goal/change` | 目标的 `complete` 与 `block` |
+| `jobs.onJobDone` | 后台任务的 `completed` 与 `failed` |
+| `tools/pre-execute` | 工具名命中 `waitingTools` 时，说明代理要停下来等你 |
+| `approval/request` | 权限询问（仅在审批策略为 `ask` 时才会派发） |
+
+**播放规则**：同一 400 毫秒窗口内的多个事件只播**优先级最高**的那条；同一场景 1.5 秒内不重复；新的提示会打断正在播的那条。
+
+**运行时零网络**：插件只读本地音频文件、只启动本地播放器。不联网、不上传、不校验。
+
+## 技术栈：用大模型给声音做「预审」
+
+这部分是我觉得最值得分享的地方。
+
+给提示音挑一个合适的音色，传统做法是**一个个盲听**：试 10 个音色、改 20 次风格描述、听到耳朵疲劳，最后凭模糊印象拍板。这个项目换了个做法——**让大模型先做初筛和排序，人只在筛出来的少数里做最终决定**。
+
+具体是三件事：
+
+**1. 用全模态模型当评审（核心）**
+
+`tools/qw_local_omni.py` 把**多段候选音频一次性**交给 Qwen-Omni，让它横向比较并按维度打分：
+
+```powershell
+python tools/qw_local_omni.py preview/a.mp3 preview/b.mp3 preview/c.mp3 `
+  --message "横向比较这几段录音，按清晰度/自然度/音色/干净度打分并排序"
+```
+
+拿到的是一个**排序**而不是一堆孤立分数——「A 比 B 更贴目标」这种相对判断，比「A 得 7 分」有用得多。实测给出的排序和理由相当具体：
+
+> A4 是唯一一个在保持清晰稳重的基础上，做到了低沉与气声质感的音色。A2 虽然成熟但不够有辨识度，A5 略显平淡，A1、A3、A6 则因音色过亮或过嫩而被排除。
+
+**2. 用 ASR 转写回读做客观校验**
+
+光听着顺耳不够——TTS 可能吞字、念错、把缩写拆开读。`tools/qw_local_asr.py` 把音频转回文字，与预期文案做字符级相似度比对：
+
+```powershell
+python tools/qw_local_asr.py assets/clips/turn-error.mp3 --lang zh
+```
+
+这条是**可以当硬门槛的客观指标**：文案是已知的，转写对不对是机械可判的。本项目 7 条音频的相似度都是 **1.000**。
+
+**3. 时长梯度作为信息编码**
+
+上面表格里的时长不是随手定的，而是把「严重程度」编码进了音频自身：**长 = 需要你出手**。这样即使手机在旁边、屏幕没看，也能靠声音长短判断该不该放下手里的事。
+
+**由此得到的完整流程**（`scripts/` 里三个脚本，可直接复现）：
+
+```
+scripts/build.mjs audition    出多个音色候选
+      ↓
+scripts/qa.mjs rank           全模态模型横向排序 + ASR 回读
+      ↓
+人听筛出来的前 2-3 个，拍板     ← 决策量被压缩到很少
+      ↓
+scripts/build.mjs build       批量生成 + 响度归一
+      ↓
+scripts/qa.mjs clips          全部质检过关
+```
+
+**一点经验**：不要把大模型的主观打分当硬门槛。实测同一段音频两次评分能从「自然 6 / 音色 4」跳到「自然 9 / 音色 7」，四段明显不同的音频甚至拿到过完全一样的分数。所以本项目把指标分了两层——**客观项（ASR 相似度、有无削波、清晰度、干净度）当门槛，主观项（自然度、音色、成熟度）只作参考**，最终由耳朵决定。这个分工是这套流程能稳定跑起来的关键。
+
+## 配置
+
+配置文件：`$DSH_HOME/voice-alerts.config.json`（`$DSH_HOME` 通常是 `~/.dsh`）。
+找不到这个文件时使用内置默认值，**所以不配置也能正常用**。文件按修改时间热读取，改完立即生效，不需要重启。
+
+完整模板见 [`assets/voice-alerts.config.json`](assets/voice-alerts.config.json)。常用项：
+
+| 配置项 | 默认 | 说明 |
+|---|---|---|
+| `enabled` | `true` | 总开关 |
+| `volume` | `85` | 0-100，**只对 ffplay 生效** |
+| `minIntervalMs` | `1500` | 同一场景的重复触发抑制窗口 |
+| `coalesceMs` | `400` | 事件聚合窗口，窗口内只播最高优先级那条 |
+| `interrupt` | `true` | 新提示是否打断正在播的 |
+| `scenes.<场景>.enabled` | `true` | 单独关掉某个场景 |
+| `player` | `"auto"` | `auto` / `ffplay` / `powershell` |
+| `waitingTools` | `["ask_user_question","exit_plan_mode"]` | 命中即视为「在等你回答」；DSH 若改工具名可在此覆盖 |
+| `clipsDir` | `null` | 自定义音频目录，优先级最高 |
+
+## 命令
+
+| 命令 | 作用 |
+|---|---|
+| `/voice-alerts` | 依次播放全部七条 |
+| `/voice-alerts on` / `off` | 立即开关（会写回配置文件） |
+| `/voice-alerts status` | 看播放器探测结果、各场景音频是否齐备 |
+| `/voice-alerts test <场景>` | 只播一条，用来排查某类事件有没有触发 |
+
+## 换成你自己的声音
+
+音频不是必须用仓库里这 7 条。完整流程：
+
+```powershell
+# 1. 改 assets/clips.json：文案在 clips.<场景>.text，音色在 model/voice/instruction
+# 2. 换音色时先出样试听（把候选写在 voiceCandidates 里）
+node scripts/build.mjs audition
+node scripts/qa.mjs rank                 # 大模型帮你排序，人只挑最终那条
+# 3. 把选定的 model/voice/instruction 写回 clips.json，然后批量生成
+node scripts/build.mjs build
+node scripts/qa.mjs clips                # 质检
+```
+
+生成音频需要：**ffmpeg**（响度归一与转码）、**Python 3**（质检脚本）、**阿里云百炼 CLI**（TTS/ASR/Omni）。这三样**只有你想自己生成时才需要**——用仓库自带音频的话，什么都不用装。
+
+生成后会有 `mp3` 与 `wav` 两份。**不要删掉 wav**：PowerShell 回退播放器只认未压缩 PCM，它是「干净 Windows 上零依赖」的保证。
+
+自己生成的音频放在 `$DSH_HOME/voice-alerts/clips/` 会自动优先于包内的（逐文件覆盖，所以只想换一条也可以）。
+
+## 装了没声音？
+
+按这个顺序排查，能覆盖绝大多数情况。完整版见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
+
+1. **重启了吗？** 插件文件不热加载，改完或装完必须完全重启 DSH Desktop。
+2. `/voice-alerts status` 看 **Player** 那一行。`unavailable` 说明两条播放路径都没探测到。
+3. **Windows 音量合成器把 `ffplay`（或 `powershell.exe`）单独静音了**——这是最常见的原因。右键任务栏音量图标 → 打开音量合成器，检查对应条目。
+4. 输出设备选错了。
+5. 某个场景被关掉了，或 `enabled` 是 `false`。
+6. 日志里有 `no audio for <场景>` → 音频文件缺失。
+7. 日志里有 `throttled <场景>` → 被节流窗口挡住了，属于正常行为。
+
+日志位置：`%APPDATA%\DSH Desktop\logs\host\dsh-<日期>.log`，搜 `voice-alerts`。
+
+⚠️ **一件事先说明**：日志里**没有** `ffplay` **不是故障**。ffplay 属于 ffmpeg，需要另外安装；它只是让启动快一点、音量可独立调节。没有它时插件会用 Windows 自带的 PowerShell 播放器，功能完全正常。
+
+## 平台与依赖
+
+**支持：Windows 10 / 11。**
+
+干净 Windows 上**不需要安装任何第三方依赖**就能出声，因为保底播放器用的是系统自带的 Windows PowerShell 5.1 + .NET `System.Media.SoundPlayer`。
+
+| 情况 | 需要什么 |
+|---|---|
+| 干净 Windows 10/11，只装了 DSH | **什么都不用装**，用系统自带播放器，启动开销约 0.4 秒 |
+| 装了 ffmpeg | 无需配置，自动改用 ffplay：启动更快、`volume` 配置生效 |
+| 想自己生成音频 | 额外需要 ffmpeg + Python 3 + 阿里云百炼 CLI |
+| 运行时网络 | **零网络** |
+
+播放后端的选择顺序：
+
+1. **ffplay**（如果探测到）—— 直接播 mp3，支持独立音量
+2. **Windows PowerShell + SoundPlayer** —— 系统自带，只认 wav，音量跟随系统
+   先试 `-File play.ps1`（可审计的磁盘脚本）；若被执行策略或 ACL 拦住，自动改用 `-EncodedCommand` 内联命令重试一次
+3. 两条都不通 → 静默降级，只在日志里记一行
+
+宿主侧**拿不到窗口是否聚焦**（DSH 的 native 桥只暴露了 `notifyAttention` 等接口），所以这个插件**任何时候都会出声**，包括你正看着窗口的时候。如果觉得吵，用 `/voice-alerts off` 或调 `volume`。
+
+## 验证状态
+
+我一向觉得，把「写过」和「验证过」分开讲清楚，比含糊地说「功能完整」有用得多。所以逐条列出，并且**明确写出验证的边界**。
+
+### 验证边界（请先读这一段）
+
+**以下结论全部来自同一台机器上的验证**：
+
+| 项 | 值 |
+|---|---|
+| 操作系统 | Windows 11 |
+| DSH | DSH Desktop 2.0.13，`@deepseek-ai/dsh` **0.1.5-rc.2** |
+| 该机器上的额外软件 | 装有 ffmpeg、Python 3、阿里云百炼 CLI |
+
+**这意味着**：
+
+- ✅ **代码正确性、事件映射、音频质量**——与本机装了什么无关，结论可迁移到你的机器。
+- ✅ **「干净 Windows 零依赖」**——保底播放器用的是 Windows 自带的 PowerShell 5.1 + .NET `System.Media.SoundPlayer`，两者都是 Win10/11 的**操作系统组件**；无 ffmpeg 的情形已通过模拟验证。
+- ⚠️ **DSH 版本**——**只在这个版本上验证过**。更高或更低的版本若改动了事件接口，某些场景可能不再触发。这是唯一真正未知、且我无法在本机消除的变数。
+- ⚠️ **在一台完全干净的、别人的 Windows 上从 GitHub 安装**——**我没有第二台机器，没有实测过这一步**。CI（见下）在 GitHub 提供的干净 Windows 运行器上覆盖了「安装 + 加载 + 后端探测」，但**运行器没有声卡，无法验证声音真的到了扬声器**。
+
+如果你在别的 DSH 版本或别的机器上遇到问题，请提 Issue 并附上日志里的 `[voice-alerts] active …` 那一行（它会写明探测到的播放器和配置路径），那基本能一眼定位。
+
+### 逐层状态
+
+| 层级 | 状态 |
+|---|---|
+| **事件层** | 7 个场景中 **6 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked` |
+| **音频层** | 7 条全部通过质检（ASR 相似度 1.000、四维达标、无削波），且逐条耳听确认真实播放完整 |
+| **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
+| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**41 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、14 个音频齐备、**无 ffplay 时 PowerShell 后端仍被探测到**、41 项自检、隐私扫描 |
+
+CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部——包括**它不能证明声音到达扬声器**这一点。
+
+### 一个已知缺陷，必须说清楚
+
+**`job-failed` 对「后台 shell 命令非零退出」实际不可达。**
+
+实测：一个以后台方式运行、`exit 7` 结束的命令，DSH 把它的状态记为 `completed`，于是播的是「后台任务完成」。原因是 job 快照里**没有退出码字段**，而 shell 后台任务的生产者只会产出 `completed` 或 `killed`；`failed` 保留给「后台**工具**任务报告错误」或生产方合约违约的情况。
+
+顺带一提：**DSH 自带的 `desktop-notifications` 用的是同一个 `status === 'failed'` 判断，所以它有完全一样的盲区**——这是框架行为，不是本插件的实现问题。
+
+这个场景**保留**了（它对工具任务失败是有效的），但它的触发**未被真实复现过**，只有代码层面的核对。你可以用 `/voice-alerts test job-failed` 验证音频本身没问题。
+
+## 目录结构
+
+```
+dsh-voice-alerts/
+├── lib/index.js                  # 插件主体，唯一运行时代码
+├── assets/
+│   ├── clips/                    # 7 条音频，每条 mp3 + wav
+│   ├── clips.json                # 文案/音色/参数的唯一事实源
+│   ├── voice-alerts.config.json  # 配置模板
+│   └── play.ps1                  # PowerShell 回退播放器（纯 ASCII，原因见文件头）
+├── tools/                        # 百炼本地音频辅助脚本（ASR / Omni）
+├── scripts/                      # 生成 / 质检 / 自检 / 隐私扫描
+├── docs/verification.md          # 逐条验证记录
+├── INSTALL.md                    # 给 Agent 看的安装步骤
+├── TROUBLESHOOTING.md            # 没声音时的排查清单
+└── CHANGELOG.md
+```
+
+## 许可
+
+代码与随包音频均以 **MIT** 发布。
+
+随包音频是用阿里云百炼（Model Studio）的语音合成生成的，不是任何人的真人录音；如果你打算使用它们，请自行确认你的用法符合相应服务条款。仓库不授予任何底层声音模型的权利。你完全可以不用这套音频——`scripts/build.mjs` 可以生成你自己的，插件也会优先使用你放在 `$DSH_HOME/voice-alerts/clips/` 的文件。
+
+## 贡献
+
+提交前请跑这两个脚本。第一个确认没有把个人路径或凭据带进来，第二个确认自检仍然全绿：
+
+```powershell
+node scripts/scan-sensitive.mjs .
+node scripts/selftest.mjs
+```
+
+`scan-sensitive.mjs` **只报告文件、行号与命中类别，绝不打印命中内容**——所以你在 Issue 里贴它的输出是安全的。它自带的规则集可以用 `$DSH_HOME/voice-alerts.scan.json`（不提交）追加你自己机器上的私有字符串。想确认它真的能抓到东西，跑 `node scripts/scan-sensitive.verify.mjs`：它植入几段明显是伪造的凭据形态值并断言扫描器能报出来，同时断言报告不回显这些值。
+
+欢迎提 Issue 与 PR。特别欢迎的：macOS / Linux 的播放后端（当前后端层是 Windows 专用的）。

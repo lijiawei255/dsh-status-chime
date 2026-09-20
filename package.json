@@ -1,0 +1,57 @@
+{
+  "name": "dsh-voice-alerts",
+  "version": "0.1.0",
+  "description": "Spoken status alerts for DeepSeek Harness: say it out loud when a turn finishes, fails, a job ends, or the agent starts waiting for you. · DSH 语音状态提示：任务完成、出错、后台任务结束、等待你回答时用声音提醒。",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "tools",
+    "scripts",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "INSTALL.md",
+    "TROUBLESHOOTING.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "voice",
+    "audio",
+    "notification",
+    "alerts",
+    "tts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.1.5-rc.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lijiawei255/dsh-voice-alerts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lijiawei255/dsh-voice-alerts/issues"
+  },
+  "homepage": "https://github.com/lijiawei255/dsh-voice-alerts#readme",
+  "os": [
+    "win32"
+  ]
+}

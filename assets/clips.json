@@ -1,0 +1,112 @@
+{
+  "_comment": [
+    "Single source of truth for dsh-voice-alerts: the spoken line, the voice, and the synthesis settings.",
+    "Regenerate everything with: node scripts/build.mjs build",
+    "Then check it with:          node scripts/qa.mjs clips",
+    "",
+    "Copy style: plain system-notice wording. Say what happened, briefly. No roleplay and no",
+    "filler. The failure lines are deliberately longer than the success lines so that the",
+    "severity can be judged by clip length alone when you are not looking at the screen.",
+    "",
+    "Voice: a mature, composed female voice at a measured pace, delivered calmly rather than",
+    "performed. Only the voice carries character; the wording stays neutral."
+  ],
+
+  "model": "qwen-audio-3.0-tts-flash",
+  "voice": "longanyuanfei",
+  "chosenCandidate": "flash-yuanfei-expressive",
+  "_voiceNote": [
+    "Set via scripts/build.mjs audition, then locked in here.",
+    "Run `node scripts/build.mjs voices` to list the candidates below, and",
+    "`bl speech synthesize --list-voices --model <model>` for the full catalogue."
+  ],
+
+  "_candidateNote": [
+    "Starting points for an audition. Each entry may override instruction/rate/pitch.",
+    "Only the voices available for the chosen model can actually be used; check the",
+    "catalogue first, since the two model families expose different voices."
+  ],
+  "voiceCandidates": [
+    {
+      "id": "flash-yuanfei-expressive",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "longanyuanfei",
+      "label": "expressive, unhurried (the shipped choice)"
+    },
+    {
+      "id": "flash-yuanfei-plain",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "longanyuanfei",
+      "label": "same voice, plainer style",
+      "instruction": "A mature adult female voice with a low, resonant tone. Steady, moderately unhurried delivery, calm and matter-of-fact. Not girlish, not flat, and not performed."
+    },
+    {
+      "id": "flash-fengyue",
+      "model": "qwen-audio-3.0-tts-flash",
+      "voice": "longanfengyue",
+      "label": "warmer, more neutral"
+    },
+    {
+      "id": "plus-lingxin",
+      "model": "qwen-audio-3.0-tts-plus",
+      "voice": "longanlingxin",
+      "label": "warmer voice from the plus model family"
+    }
+  ],
+
+  "instruction": "A mature, composed adult female voice with a slightly hushed, close-mic quality. Steady delivery at a noticeably unhurried pace, phrases easing off gently at the end. Calm and self-assured. Not girlish, not exaggerated, and not flat or mechanical.",
+  "rate": 0.95,
+  "pitch": 1.0,
+  "volume": 60,
+  "format": "mp3",
+  "sampleRate": 24000,
+  "language": "zh",
+
+  "_consistencyNote": [
+    "The clips shipped in assets/clips were generated with an equivalent style instruction.",
+    "TTS output is stochastic, so regenerating will not reproduce the shipped files byte for",
+    "byte even with identical settings; it lands in the same style range, nothing more."
+  ],
+
+  "auditionText": "任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。",
+
+  "loudnorm": { "I": -16, "TP": -1.5, "LRA": 11 },
+
+  "clips": {
+    "turn-done": {
+      "text": "任务完成。",
+      "expect": "任务完成",
+      "length": "short"
+    },
+    "turn-error": {
+      "text": "任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。",
+      "expect": "任务执行出错本轮未能完成请回到 DSH 查看错误详情",
+      "length": "long"
+    },
+    "needs-input": {
+      "text": "需要你回答。",
+      "expect": "需要你回答",
+      "length": "short"
+    },
+    "job-done": {
+      "text": "后台任务完成。",
+      "expect": "后台任务完成",
+      "length": "short"
+    },
+    "job-failed": {
+      "text": "后台任务失败，请回到 DSH 查看详情。",
+      "expect": "后台任务失败请回到 DSH 查看详情",
+      "length": "mid"
+    },
+    "goal-complete": {
+      "text": "目标已完成。",
+      "expect": "目标已完成",
+      "length": "short"
+    },
+    "goal-blocked": {
+      "text": "目标受阻，需要你介入处理后才能继续。",
+      "expect": "目标受阻需要你介入处理后才能继续",
+      "length": "mid"
+    }
+  }
+}
