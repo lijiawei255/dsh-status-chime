@@ -11,7 +11,7 @@
 #   - the plugin module imports node builtins only, so a clean machine needs nothing
 #   - all 32 packaged clips exist and are non-empty (8 scenes x 2 languages x 2 formats)
 #   - with no ffplay anywhere, the PowerShell backend is still detected and used
-#   - the 52-check logic suite passes
+#   - the 53-check logic suite passes
 #   - no personal path or credential-shaped string is committed
 #
 # DOES NOT PROVE:

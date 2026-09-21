@@ -427,9 +427,9 @@ path, which usually pinpoints the cause immediately.
 | **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
 | **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the automated quality gate (ASR similarity 1.000, clarity and cleanliness 10/10, no clipping). The **Chinese** set was additionally confirmed by ear, clip by clip, to play through completely; **the English set has not had that listening pass** — it passed the automated gate only |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
-| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **52 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, and language switching with its fallback |
+| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **53 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, and language switching with its fallback |
 | **Language** | Chinese is the default; after `lang en` the plugin genuinely resolves the English **file** (the test asserts on the resolved filename, not just the status text); an unrecognised language in the config falls back to Chinese instead of going silent |
-| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 52-check suite, and the privacy scan |
+| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 53-check suite, and the privacy scan |
 
 On the `approval` scene specifically: it can only fire under the `ask` approval policy, and
 although it was heard on a real approval request, **which of the two paths delivered it is
@@ -466,7 +466,7 @@ dsh-status-chime/
 ├── scripts/                      # build / qa / selftest / negative control / privacy scan
 │   ├── build.mjs                 # synthesise clips (takes --lang)
 │   ├── qa.mjs                    # quality gate (takes --lang)
-│   ├── selftest.mjs              # offline logic suite, 52 checks
+│   ├── selftest.mjs              # offline logic suite, 53 checks
 │   ├── qa-negative-control.mjs   # proves the gate actually rejects bad audio
 │   ├── verify-local-install.mjs  # verifies an installed single-file copy
 │   ├── scan-sensitive.mjs        # privacy / wording scan

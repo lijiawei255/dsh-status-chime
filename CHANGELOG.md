@@ -42,9 +42,9 @@ uses [Semantic Versioning](https://semver.org/).
   the resolved **file** and not merely the label.
 - **`docs/verification.md`** now records the per-item evidence, including the margin for each
   silence floor separately and the fixtures the negative control relies on.
-- The offline suite grew from 41 to **52 checks** across this and the previous release:
+- The offline suite grew from 41 to **53 checks** across this and the previous release:
   43 for the approval scene, then 50 with the seven language checks, then 52 with the two
-  bracketed-language checks below.
+  bracketed-language checks, then 53 with the command-input guard — see Fixed.
 
 ### Changed
 
@@ -72,6 +72,14 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Every sub-command was unreachable by typing.** `/voice-alerts` on its own worked, so
+  the command looked healthy, but `on`, `off`, `status`, `test <scene>` and `lang <zh|en>`
+  could not be invoked at all: typing a space after the command name submitted the whole
+  line as an ordinary chat message. The command UI's decision table claims a line only when
+  its first token is the bare command name — *unless* the registration declares an `input`
+  descriptor, in which case arguments are accepted. This registration had none, so adding
+  `input: { hint: ... }` is the entire fix. Found from a user report; the field now has a
+  check of its own so it cannot be dropped again.
 - **`/voice-alerts lang <en>` no longer fails.** The help text spells the syntax
   `lang <zh|en>`, where the angle brackets are placeholder notation — but people copy them
   along, and `<en>` was then rejected as an unknown language while the error echoed the

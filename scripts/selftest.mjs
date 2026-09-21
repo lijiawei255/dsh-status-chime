@@ -245,6 +245,12 @@ check('a playable backend was detected', infoLogs.some((l) => /player (ffplay|po
 check('all 8 scenes are registered', infoLogs.some((l) => l.includes('8 scenes')));
 check('the isolated config was used, not the real one', infoLogs.some((l) => l.includes(SANDBOX)));
 check('the /voice-alerts command was registered', commandDef !== null && commandDef.name === 'voice-alerts');
+// Without an `input` hint the command UI claims only the bare command name and
+// submits anything containing a space as an ordinary message, so on/off/status/
+// test/lang become unreachable by typing. Asserting the field guards that trap.
+check('/voice-alerts declares an input hint, so its arguments are typeable',
+  typeof commandDef?.input?.hint === 'string' && commandDef.input.hint.trim().length > 0,
+  commandDef?.input?.hint ?? '(missing input.hint)');
 check('sessions / jobs / commands were all injected',
   injected.has('sessions') && injected.has('jobs') && injected.has('commands'));
 check('tools/pre-execute and approval/request are hooked',
