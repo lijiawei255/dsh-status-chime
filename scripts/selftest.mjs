@@ -446,7 +446,11 @@ check('/voice-alerts lang reports the default language as zh',
   langDefault.kind === 'success' && /Language: zh\b/.test(langDefault.text),
   langDefault.text.split('\n')[0]);
 
-const toEn = await commandDef.handler({ rawInput: 'lang en' });
+// rawInput here carries a LEADING SPACE on purpose: that is the exact shape DSH's
+// own parseCommand produces (`line.slice('/voice-alerts'.length)`), verified by
+// calling the shipped function. Feeding the plain string would leave the gap
+// between DSH's output and this handler untested.
+const toEn = await commandDef.handler({ rawInput: ' lang en' });
 const persisted = JSON.parse(readFileSync(join(SANDBOX, 'voice-alerts.config.json'), 'utf8')).language;
 check('/voice-alerts lang en switches and persists the setting',
   toEn.kind === 'success' && persisted === 'en',

@@ -232,6 +232,51 @@ Also note that a `language` value that is not `zh` or `en` **falls back to Chine
 than muting the plugin, so a typo in the config looks like "my English setting did nothing"
 — check the `Language:` line in `status` rather than assuming the setting took.
 
+## 14. The command runs with no arguments, but typing `on` / `off` / `status` / `test` / `lang` does nothing
+
+Symptom: `/voice-alerts` on its own works (you hear eight alerts and get a status reply),
+but the moment you add a space and a word, nothing happens — the line is submitted as an
+ordinary chat message instead of running the command.
+
+**On versions before 0.3.0 this was a real bug**: the command was registered without an
+`input` descriptor, and DSH's command UI claims a line whose first token is the bare
+command name only when that descriptor is present. Without it, anything containing a space
+fell through to "send as a message", so every sub-command was unreachable. Upgrading and
+restarting fixes it. If you are on 0.3.0 or later and still see this, it is one of the two
+character traps below.
+
+**Trap 1 — a full-width slash.** With a Chinese IME active, `/` is easy to type as `／`
+(U+FF0F). DSH checks the first character against an ASCII `/`, so the line is not a command
+at all:
+
+```
+／voice-alerts lang en     ← not a command
+/voice-alerts lang en      ← correct
+```
+
+**Trap 2 — a capital letter in the command name.** The name must match `/^[a-z][a-z0-9_-]*$/`,
+so `/Voice-Alerts` or `/Voice-alerts` is not recognised:
+
+```
+/Voice-Alerts lang en      ← not a command
+/voice-alerts lang en      ← correct
+```
+
+Picking the command from the autocomplete list avoids both traps, because the list inserts
+the exact lowercase name.
+
+Everything else is accepted. The whole remainder of the line is passed through as the
+command's input, so a second word, several spaces, a tab, or extra trailing words all
+work:
+
+```
+/voice-alerts lang en
+/voice-alerts test goal-blocked
+/voice-alerts lang  en
+/voice-alerts lang EN          (case-folded)
+/voice-alerts lang <en>        (the brackets are placeholder notation; tolerated)
+```
+
 ## Still stuck?
 
 Open an issue with:
