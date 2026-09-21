@@ -42,10 +42,11 @@ uses [Semantic Versioning](https://semver.org/).
   the resolved **file** and not merely the label.
 - **`docs/verification.md`** now records the per-item evidence, including the margin for each
   silence floor separately and the fixtures the negative control relies on.
-- The offline suite grew from 41 to **60 checks** across this and the previous release:
+- The offline suite grew from 41 to **63 checks** across this and the previous release:
   43 for the approval scene, 50 with the seven language checks, 52 with the two
   bracketed-language checks, 53 with the command-input guard, 55 with the observed
-  asset-resolution and resolved-file checks, and 60 with the config-surface checks — see Fixed.
+  asset-resolution and resolved-file checks, 60 with the config-surface checks, and 63 with
+  the volume and unload checks — see Fixed.
 
 ### Changed
 
@@ -73,6 +74,19 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`volume` and the unload path are now checked, and both needed the log to become
+  observable.** The volume is passed straight into the ffplay argument list, so "did the
+  configured volume reach the player?" could not be answered from outside at all; play lines
+  now carry `, vol <n>` when ffplay is what plays. Two checks result, and both run on either
+  backend rather than skipping: the PowerShell path must **not** claim a volume (that player
+  follows the system volume), and when ffplay is used the configured number must be the one
+  reported. On a runner without ffplay the second check still exercises the "no false claim"
+  branch and says so in its detail line.
+- **The mock discarded `ctx.effect`'s disposer**, so "the plugin releases the player when it
+  is unloaded" was untestable in either direction — and the plugin's registration is on the
+  ROOT context, which had its own discarding `effect`. Both now keep the returned disposer,
+  the unload path logs `released the player on unload`, and the suite runs every disposer
+  and asserts that line. The suite is 63 checks.
 - **`interrupt` was undone by its own fallback.** When a higher-priority alert cut in, the
   plugin killed the clip that was playing — and a process killed on purpose reports
   `code === null`, which is neither `0` nor `2`, so the `play.ps1` retry handler read it as

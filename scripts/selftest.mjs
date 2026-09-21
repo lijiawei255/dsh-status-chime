@@ -135,6 +135,8 @@ const QUIET = 700;
 
 // ── mock cordis context ──────────────────────────────────────────────────
 const listeners = new Map();
+/** Disposers returned by `ctx.effect`, kept so the unload path can be exercised. */
+const disposers = [];
 const injected = new Map();
 let commandDef = null;
 let jobDoneHandler = null;
@@ -144,7 +146,17 @@ const warnLogs = [];
 
 function buildChild(service) {
   return {
-    effect(fn) { fn(); return () => {}; },
+    /**
+     * Like the real contract: `fn` runs immediately and whatever it returns is the
+     * disposer. Keeping the disposer is what makes the unload path testable at all —
+     * the mock used to discard it, so "the plugin releases the player when it is
+     * disposed" could not be checked in either direction.
+     */
+    effect(fn) {
+      const disposer = fn();
+      if (typeof disposer === 'function') disposers.push({ service, dispose: disposer });
+      return () => {};
+    },
     on(event, fn) {
       const key = `child:${service}:${event}`;
       if (!listeners.has(key)) listeners.set(key, []);
@@ -176,7 +188,14 @@ function makeCtx() {
       listeners.get(event).push(fn);
       return () => {};
     },
-    effect(fn) { fn(); return () => {}; },
+    // Same contract as buildChild's: run `fn`, keep what it returns. The plugin's
+    // "release the player on unload" effect is registered on the ROOT context, so
+    // discarding disposers here would hide exactly that path.
+    effect(fn) {
+      const disposer = fn();
+      if (typeof disposer === 'function') disposers.push({ service: 'root', dispose: disposer });
+      return () => {};
+    },
     inject(services, fn) {
       for (const service of services) {
         if (!injected.has(service)) injected.set(service, buildChild(service));
@@ -651,16 +670,17 @@ await sleep(60);
 
 /**
  * What the last play of a scene actually used, read from the plugin's own log line:
- * the resolved FILE NAME, the BACKEND and the resolution LEVEL. This is the oracle
- * the suite was missing — without it, "played turn-done" cannot distinguish the
- * Chinese clip from the English one, or mp3 from wav, or user from packaged.
+ * the resolved FILE NAME, the BACKEND, the resolution LEVEL, and — for ffplay only — the
+ * volume it was handed. This is the oracle the suite was missing: without it, "played
+ * turn-done" cannot distinguish the Chinese clip from the English one, or mp3 from wav,
+ * or a user override from a packaged file, or a configured volume from the default.
  */
 function playedFileSinceMark(mark, scene) {
   const lines = infoLogs.slice(mark.info).concat(warnLogs.slice(mark.warn));
-  const pattern = new RegExp(`playing ${scene} .*\\[([^\\s]+) via (\\w+) from (\\w+)\\]`);
+  const pattern = new RegExp(`playing ${scene} .*\\[([^\\s]+) via (\\w+) from (\\w+)(?:, vol (\\d+))?\\]`);
   for (const line of [...lines].reverse()) {
     const m = pattern.exec(line);
-    if (m) return { file: m[1], backend: m[2], source: m[3] };
+    if (m) return { file: m[1], backend: m[2], source: m[3], volume: m[4] ?? null };
   }
   return null;
 }
@@ -753,6 +773,42 @@ check('a play.ps1 that exits non-zero falls back to the inline -EncodedCommand',
 
 rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS });
 await sleep(60);
+
+// (e) `volume` is ffplay-only, so this asserts the SHAPE on whichever backend is present:
+// the configured number must appear when ffplay plays, and must not be claimed when the
+// PowerShell player is used, since that one follows the system volume. The detail line
+// says which branch ran, so a run on a machine without ffplay is not mistaken for having
+// verified the value.
+const EXPECTED_VOLUME = 42;
+const psVolume = await playAndRead('turn-done');
+check('the PowerShell path does not claim a volume (it follows the system volume)',
+  psVolume !== null && psVolume.backend === 'powershell' && psVolume.volume === null,
+  psVolume === null ? '(no play logged)' : `backend=${psVolume.backend} volume=${psVolume.volume}`);
+rewriteSandboxConfig({ player: 'auto', clipsDir: SILENT_CLIPS, volume: EXPECTED_VOLUME, ffplayPath: null });
+await sleep(60);
+const autoVolume = await playAndRead('turn-done');
+check('the configured volume reaches the player that honours it',
+  autoVolume !== null
+  && (autoVolume.backend === 'ffplay'
+    ? autoVolume.volume === String(EXPECTED_VOLUME)
+    : autoVolume.volume === null),
+  autoVolume === null
+    ? '(no play logged)'
+    : `backend=${autoVolume.backend} volume=${autoVolume.volume} (ffplay would carry ${EXPECTED_VOLUME})`);
+
+// (f) Unloading the plugin must release the player. The mock keeps the disposers that
+// `ctx.effect` returns, so this runs the real unload path instead of assuming it. It runs
+// last: it disposes every subscription the run installed.
+for (const { dispose } of [...disposers].reverse()) {
+  try {
+    dispose();
+  } catch {
+    /* disposable failures are the plugin's problem, not the harness's */
+  }
+}
+check('unloading the plugin releases the player',
+  infoLogs.some((l) => l.includes('released the player on unload')),
+  infoLogs.slice(-1)[0] ?? '(no log)');
 
 // ── summary ──────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.ok);

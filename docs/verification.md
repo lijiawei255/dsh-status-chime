@@ -241,7 +241,7 @@ Worth recording because it affects how you develop and install this plugin:
 
 ## 7. What is covered by the offline suite
 
-`scripts/selftest.mjs` runs 60 checks against a mock cordis context, with no restart and no
+`scripts/selftest.mjs` runs 63 checks against a mock cordis context, with no restart and no
 real event required. It covers: the eight scene mappings, the four silent goal operations,
 subagent filtering, autonomous-round handling, coalescing and priority, per-scene
 throttling, all four `/voice-alerts` verbs, command-name collision handling, asset
