@@ -11,7 +11,7 @@
 #   - the plugin module imports node builtins only, so a clean machine needs nothing
 #   - all 32 packaged clips exist and are non-empty (8 scenes x 2 languages x 2 formats)
 #   - with no ffplay anywhere, the PowerShell backend is still detected and used
-#   - the 53-check logic suite passes
+#   - the 55-check logic suite passes
 #   - no personal path or credential-shaped string is committed
 #
 # DOES NOT PROVE:
@@ -198,8 +198,20 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $content = Get-Content 'lib/index.js' -Raw
-          $imports = [regex]::Matches($content, "(?m)^import .*?from\s+'([^']+)'") | ForEach-Object { $_.Groups[1].Value }
+          # Deliberately not anchored to `^import ... from '...'`: that older form
+          # missed double-quoted specifiers, multi-line import lists, `export ... from`
+          # and dynamic `import()`, so a real third-party dependency could be imported
+          # in any of those shapes while this step still reported "node builtins only".
+          $pattern = "(?s)from\s+['""]([^'""]+)['""]|import\s*\(\s*['""]([^'""]+)['""]\s*\)|require\s*\(\s*['""]([^'""]+)['""]\s*\)"
+          $imports = [regex]::Matches($content, $pattern) | ForEach-Object {
+            if ($_.Groups[1].Success) { $_.Groups[1].Value }
+            elseif ($_.Groups[2].Success) { $_.Groups[2].Value }
+            else { $_.Groups[3].Value }
+          }
           Write-Host "imports: $($imports -join ', ')"
+          # A vacuous pass is the failure mode that matters here: if the pattern stops
+          # matching, the list is empty and "no non-builtin imports" is trivially true.
+          if ($imports.Count -eq 0) { throw 'no module specifiers were found in lib/index.js; this check would pass vacuously' }
           $nonBuiltin = @($imports | Where-Object { -not $_.StartsWith('node:') })
           if ($nonBuiltin.Count -gt 0) {
             throw "lib/index.js imports non-builtin modules: $($nonBuiltin -join ', ')"
@@ -217,11 +229,18 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # The suite already exercised this path; asserting it by name keeps the
+          # The suite already exercised this path; asserting it BY NAME keeps the
           # "zero dependency" promise from silently disappearing.
+          #
+          # The old first assertion was `-notmatch 'falls back to PowerShell'`, which
+          # could never fail: that string is the check's NAME, so it is printed whether
+          # the check passed or failed. Only the second line below did any work. This
+          # now requires a PASS line for that check, which covers both "did not run"
+          # and "ran and failed".
           $output = node scripts/selftest.mjs 2>&1 | Out-String
-          if ($output -notmatch 'falls back to PowerShell') { throw 'the PowerShell fallback check did not run' }
-          if ($output -match '(?m)^FAIL.*falls back') { throw 'the PowerShell fallback FAILED on a machine with no ffmpeg' }
+          if ($output -notmatch '(?m)^PASS\s+.*falls back to PowerShell') {
+            throw 'the PowerShell fallback check did not run, or did not pass'
+          }
           Write-Host 'ships-with-Windows playback verified without ffmpeg'
 
       - name: Privacy scan

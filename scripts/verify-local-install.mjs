@@ -65,9 +65,15 @@ process.env.DSH_HOME = SANDBOX;
 
 const ffmpeg = findFfmpeg();
 if (ffmpeg === null) {
+  // Exit NON-ZERO on purpose. This used to `process.exit(0)`, which printed
+  // "skipped (0 checks run)" and then reported success — so on the very machine
+  // this script exists for (a clean Windows box with no ffmpeg), it verified
+  // nothing while looking green. A verification tool that could not verify must
+  // not be indistinguishable from one that did.
   console.log('SKIP  ffmpeg not found; the throwaway clips cannot be synthesised.');
-  console.log('\n==== skipped (0 checks run) ====');
-  process.exit(0);
+  console.log('\n==== NOT VERIFIED (0 checks run) — this is not a pass ====');
+  console.log('Install ffmpeg, or set VOICE_ALERTS_FFMPEG, then re-run.');
+  process.exit(2);
 }
 for (const scene of SCENES) {
   for (const ext of ['mp3', 'wav']) {

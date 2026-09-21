@@ -248,8 +248,17 @@ function extractJsonObject(text) {
 }
 
 // ── individual checks ─────────────────────────────────────────────────────
-function runAsr(file) {
-  const result = probe(PYTHON, [ASR_SCRIPT, file, '--lang', 'zh', '--model', ASR_MODEL, '--json']);
+/**
+ * Transcribe one clip with the ASR language hint of THAT clip's language.
+ *
+ * This used to hardcode `--lang zh` for every clip, including the English eight.
+ * It happened to still score 1.000, but the measurement was not the one the docs
+ * described: the English set's "objective hard gate" was being taken with a
+ * Chinese language hint, so the number did not mean what it was presented as
+ * meaning. The hint now follows the clip.
+ */
+function runAsr(file, language) {
+  const result = probe(PYTHON, [ASR_SCRIPT, file, '--lang', language, '--model', ASR_MODEL, '--json']);
   if (result.status !== 0) return { ok: false, transcript: '', error: (result.stderr || '').trim().slice(-400) };
   const parsed = extractJsonObject(result.stdout);
   const choices = (parsed?.output?.choices) ?? parsed?.choices ?? [];
@@ -309,7 +318,7 @@ function speechUnits(text, language) {
 }
 
 function evaluate(file, expected, id, { language = DEFAULT_LANGUAGE, text = null } = {}) {
-  const asr = runAsr(file);
+  const asr = runAsr(file, language);
   const omni = runOmni([file], OMNI_PROMPT);
   const tech = technical(file);
   const score = asr.ok ? similarity(expected, asr.transcript) : 0;
@@ -539,8 +548,9 @@ if (mode === null) {
   process.stdout.write('  preview              check preview/*.mp3 against the audition line\n');
   process.stdout.write('  rank                 send every preview clip to Omni at once, for a ranking\n');
   process.stdout.write('  file <path> [text]   check a single file\n');
+  process.stdout.write('  asr [--lang <code>]  re-run only the ASR read-back (one paid call per clip, no Omni)\n');
   process.stdout.write('\n');
-  process.stdout.write('  --lang <code>        clips mode: only this language\n');
+  process.stdout.write('  --lang <code>        clips / asr mode: only this language\n');
   process.stdout.write('  --root <dir>         project root\n');
   process.stdout.write('  --report <path>      where to write report.md\n');
   process.stdout.write('\n');
@@ -551,6 +561,38 @@ if (mode === null) {
 if (mode === 'rank') {
   cmdRank();
   process.exit(0);
+}
+
+/**
+ * ASR-only re-measurement.
+ *
+ * The read-back is the one HARD gate that depends on the language hint, so when
+ * that hint is corrected — or when audio is regenerated — it is worth re-running
+ * WITHOUT paying for the Omni scores again. `clips` calls both endpoints; this
+ * calls only the ASR one, one paid request per clip.
+ */
+if (mode === 'asr') {
+  const list = clipTargets(argValue('--lang'));
+  if (list.length === 0) {
+    process.stderr.write('no clips to transcribe (mode asr). Expected: asr [--lang <code>]\n');
+    process.exit(1);
+  }
+  process.stdout.write(`transcribing ${list.length} clip(s), each with its own language hint ...\n`);
+  let worst = 1;
+  let failures = 0;
+  for (const target of list) {
+    const asr = runAsr(target.file, target.language);
+    const score = asr.ok ? similarity(target.expected, asr.transcript) : 0;
+    const ok = asr.ok && score >= SIMILARITY_THRESHOLD;
+    if (!ok) failures += 1;
+    worst = Math.min(worst, score);
+    process.stdout.write(
+      `  ${ok ? 'pass' : 'FAIL'}  ${target.id.padEnd(20)} ${target.language}  `
+      + `similarity ${score.toFixed(3)}  ${asr.ok ? asr.transcript : (asr.error ?? 'asr failed')}\n`,
+    );
+  }
+  process.stdout.write(`\nworst similarity ${worst.toFixed(3)} (hard gate ${SIMILARITY_THRESHOLD}); ${failures} failure(s)\n`);
+  process.exit(failures === 0 ? 0 : 1);
 }
 
 const targets = mode === 'preview'

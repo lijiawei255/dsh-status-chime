@@ -105,6 +105,14 @@ writeFileSync(join(SANDBOX, 'voice-alerts.config.json'), JSON.stringify(sandboxC
  * Rewrite the sandbox config and force its mtime forward.
  * The plugin hot-reads the config by mtime and caches the player probe per
  * `config.player`, so the bumped timestamp is what makes a change take effect.
+ *
+ * FOOTGUN: `patch` is merged into the ORIGINAL `sandboxConfig`, never into the
+ * previous result, so every field a patch does not name silently reverts to its
+ * original value. Two consequences worth remembering:
+ *   - settings do not accumulate; each call must restate what it needs;
+ *   - dropping `player` resets it to 'auto', which retires the plugin's cached
+ *     player probe early, so a later test that sets `player` to force a fresh probe
+ *     will hit the stale cache instead and see the old backend.
  */
 let configStamp = Date.now() / 1000;
 function rewriteSandboxConfig(patch) {
@@ -478,9 +486,15 @@ check('with en active, the whole English clip set resolves',
 mark = markNow();
 await commandDef.handler({ rawInput: 'test turn-done' });
 await sleep(QUIET);
-check('with en active, playing still selects a clip rather than going silent',
-  playedSinceMark(mark).includes('turn-done'),
-  playedSinceMark(mark).join(',') || logSinceMark(mark).slice(-1)[0] || '(no log)');
+// The file-level assertion the docs always claimed but no test performed: with `en`
+// active the plugin must resolve the ENGLISH clip. A scene-name-only check cannot
+// tell `turn-done.en.mp3` from `turn-done.mp3`, which is the whole point of the switch.
+const resolvedEn = playedFileSinceMark(mark, 'turn-done');
+check('with en active, the ENGLISH clip is the file that plays',
+  resolvedEn !== null && resolvedEn.file === 'turn-done.en.mp3',
+  resolvedEn === null
+    ? (playedSinceMark(mark).join(',') || logSinceMark(mark).slice(-1)[0] || '(no log)')
+    : resolvedEn.file);
 
 const badLang = await commandDef.handler({ rawInput: 'lang klingon' });
 check('/voice-alerts lang rejects an unknown language',
@@ -551,36 +565,88 @@ await sleep(60);
 mark = markNow();
 const viaPs = await commandDef.handler({ rawInput: 'test turn-done' });
 await sleep(QUIET);
+const resolvedPs = playedFileSinceMark(mark, 'turn-done');
 check('forcing PowerShell picks the .wav and plays (SoundPlayer cannot read mp3)',
-  viaPs.kind === 'success' && playedSinceMark(mark).includes('turn-done'),
-  viaPs.text.replace(/\n/g, ' / '));
+  viaPs.kind === 'success' && resolvedPs !== null
+  && resolvedPs.backend === 'powershell' && resolvedPs.file === 'turn-done.wav',
+  resolvedPs === null ? viaPs.text.replace(/\n/g, ' / ') : `${resolvedPs.file} via ${resolvedPs.backend}`);
 
-// Resolution-order check: the user-level directory must win over the packaged one.
-// (A "only mp3 present" scenario cannot be built at all once the package ships
-// .wav files, because level 3 always finds one. That is the fallback working.)
+// ── asset resolution order, OBSERVED ─────────────────────────────────────
+// The plugin names the level it picked in the play log (`[<file> via <backend>
+// from <source>]`), which is what makes the documented order checkable at all.
+// It used to be "proved" by resolveOrderProbe() below: a local re-implementation of
+// the search that read its own hardcoded array, so it returned the user-level path
+// by construction and passed no matter what the plugin actually resolved.
 const USER_CLIPS = join(SANDBOX, 'voice-alerts', 'clips');
-const mp3OnlyDir = join(SANDBOX, 'mp3-only');
-mkdirSync(mp3OnlyDir, { recursive: true });
-const statusWithOverride = await commandDef.handler({ rawInput: 'status' });
-check('an empty user-level directory still resolves every scene from the package',
-  SCENE_NAMES.every((scene) => !statusWithOverride.text.includes(`${scene}=on (missing)`)),
-  statusWithOverride.text.split('\n').find((l) => l.startsWith('Scenes')) ?? '(no Scenes line)');
+const OVERRIDE_DIR = join(SANDBOX, 'override-clips');
+/** Write a placeholder with BOTH extensions, so the test does not depend on the backend. */
+const placeBoth = (dir, scene) => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${scene}.mp3`), 'placeholder', 'utf8');
+  writeFileSync(join(dir, `${scene}.wav`), 'placeholder', 'utf8');
+};
+const playAndRead = async (scene) => {
+  mark = markNow();
+  await commandDef.handler({ rawInput: `test ${scene}` });
+  await sleep(QUIET);
+  return playedFileSinceMark(mark, scene);
+};
 
-// Put one unmistakable file in the user level and confirm it becomes the source.
-writeFileSync(join(USER_CLIPS, 'turn-done.mp3'), 'placeholder', 'utf8');
-const overridden = resolveOrderProbe();
+// (1) No override anywhere: every scene must still resolve, from the package.
+// `player` is named in every patch in this block on purpose: rewriteSandboxConfig
+// composes each config from the ORIGINAL one, so a patch that omits `player`
+// silently resets it to 'auto'. That retires the plugin's cached player probe early,
+// and the no-ffmpeg fallback test further down then sets `player: 'auto'`, sees no
+// change, and reads the stale cache instead of re-probing — which is how this block
+// first broke that test.
+rewriteSandboxConfig({ player: 'powershell', clipsDir: null });
+await sleep(60);
+const noOverride = await commandDef.handler({ rawInput: 'status' });
+const scenesLine = noOverride.text.split('\n').find((l) => l.startsWith('Scenes')) ?? '';
+check('with no override at all, all eight scenes are present',
+  SCENE_NAMES.every((scene) => scenesLine.includes(`${scene}=on`)) && !scenesLine.includes('(missing)'),
+  scenesLine || '(no Scenes line)');
+const fromPackage = await playAndRead('turn-done');
+check('with no override, a scene resolves from the packaged assets',
+  fromPackage !== null && fromPackage.source === 'package',
+  fromPackage === null ? '(no play logged)' : `from ${fromPackage.source}`);
+
+// (2) A user-level file must outrank the package.
+placeBoth(USER_CLIPS, 'turn-done');
+const fromUser = await playAndRead('turn-done');
 check('a user-level file takes precedence over the packaged one',
-  overridden.endsWith(join('voice-alerts', 'clips', 'turn-done.mp3')),
-  overridden);
-rmSync(join(USER_CLIPS, 'turn-done.mp3'), { force: true });
+  fromUser !== null && fromUser.source === 'user',
+  fromUser === null ? '(no play logged)' : `from ${fromUser.source}`);
 
-function resolveOrderProbe() {
-  // Mirrors the plugin's documented order for one scene, using only existence.
-  const candidates = [
-    join(USER_CLIPS, 'turn-done.mp3'),
-    join(REPO_ROOT, 'assets', 'clips', 'turn-done.mp3'),
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) ?? '(none)';
+// (3) An explicit clipsDir must outrank both.
+placeBoth(OVERRIDE_DIR, 'turn-done');
+rewriteSandboxConfig({ player: 'powershell', clipsDir: OVERRIDE_DIR });
+await sleep(60);
+const fromOverride = await playAndRead('turn-done');
+check('an explicit clipsDir outranks the user and packaged levels',
+  fromOverride !== null && fromOverride.source === 'clipsDir',
+  fromOverride === null ? '(no play logged)' : `from ${fromOverride.source}`);
+
+rmSync(join(USER_CLIPS, 'turn-done.mp3'), { force: true });
+rmSync(join(USER_CLIPS, 'turn-done.wav'), { force: true });
+rmSync(OVERRIDE_DIR, { recursive: true, force: true });
+rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS });
+await sleep(60);
+
+/**
+ * What the last play of a scene actually used, read from the plugin's own log line:
+ * the resolved FILE NAME, the BACKEND and the resolution LEVEL. This is the oracle
+ * the suite was missing — without it, "played turn-done" cannot distinguish the
+ * Chinese clip from the English one, or mp3 from wav, or user from packaged.
+ */
+function playedFileSinceMark(mark, scene) {
+  const lines = infoLogs.slice(mark.info).concat(warnLogs.slice(mark.warn));
+  const pattern = new RegExp(`playing ${scene} .*\\[([^\\s]+) via (\\w+) from (\\w+)\\]`);
+  for (const line of [...lines].reverse()) {
+    const m = pattern.exec(line);
+    if (m) return { file: m[1], backend: m[2], source: m[3] };
+  }
+  return null;
 }
 
 // Simulate a machine without ffmpeg: auto plus a bogus ffplayPath must fall back.

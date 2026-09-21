@@ -33,13 +33,16 @@ function findFfmpeg() {
 
 const ffmpeg = findFfmpeg();
 if (ffmpeg === null) {
-  // Skip rather than fail: this test needs ffmpeg to build its fixtures, and
-  // ffmpeg is optional everywhere else in the project. CI runs without it, so a
-  // hard failure here would be a false alarm rather than a finding.
+  // Exit 2, not 0. The old comment argued exit 0 was right because a hard failure
+  // here would be a false alarm — true, but exit 0 made "could not check" the same
+  // status as "checked and clean", both for a human reading the tail and for any
+  // script. 2 is neither a pass nor a claim that the gate is broken; it says the
+  // evidence is missing. Nothing in CI runs this file.
   console.log('SKIP  ffmpeg not found; the defect fixtures cannot be synthesised.');
   console.log('      The gate itself is unaffected - ffmpeg is only needed to regenerate audio.');
-  console.log('\n==== skipped (0 checks run) ====');
-  process.exit(0);
+  console.log('\n==== NOT VERIFIED (0 checks run) — this is not a pass ====');
+  console.log('Install ffmpeg, or set VOICE_ALERTS_FFMPEG, then re-run.');
+  process.exit(2);
 }
 
 const SANDBOX = mkdtempSync(join(tmpdir(), 'qa-negctl-'));

@@ -42,9 +42,10 @@ uses [Semantic Versioning](https://semver.org/).
   the resolved **file** and not merely the label.
 - **`docs/verification.md`** now records the per-item evidence, including the margin for each
   silence floor separately and the fixtures the negative control relies on.
-- The offline suite grew from 41 to **53 checks** across this and the previous release:
-  43 for the approval scene, then 50 with the seven language checks, then 52 with the two
-  bracketed-language checks, then 53 with the command-input guard — see Fixed.
+- The offline suite grew from 41 to **55 checks** across this and the previous release:
+  43 for the approval scene, then 50 with the seven language checks, 52 with the two
+  bracketed-language checks, 53 with the command-input guard, and 55 with the observed
+  asset-resolution and resolved-file checks — see Fixed.
 
 ### Changed
 
@@ -72,6 +73,44 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The suite now observes what was actually resolved, instead of only the plugin's own
+  log prose.** A play used to be reported as `playing <scene>`, which cannot tell the
+  Chinese clip from the English one, mp3 from wav, or a user override from the packaged
+  file — so a wrong-file regression, a `volume` value lost, or a missing `interrupt` were
+  all invisible. The log line now ends with `[<file> via <backend> from <source>]` and the
+  checks assert on it: `turn-done.en.mp3` after a language switch, `turn-done.wav` with the
+  PowerShell backend, and `from clipsDir` / `from user` / `from package` for the
+  documented resolution order.
+- **The resolution-order check was tautological.** It called a local `resolveOrderProbe()`
+  that searched its own hardcoded two-element array — and the test had just written the
+  first element — so it returned the user-level path by construction and passed no matter
+  what the plugin did. It is replaced by the observed `from <source>` assertions above, and
+  the dead `mp3-only` fixture next to it is gone.
+- **The ASR read-back ran with a hardcoded `--lang zh`, including for the eight English
+  clips.** The number happened to still be 1.000, but the English set's objective hard gate
+  was not the measurement the docs described. The hint now follows each clip, and the eight
+  English clips were re-measured with `--lang en`: 1.000 on all eight, transcripts matching
+  the intended lines. `qa.mjs asr [--lang <code>]` was added so this can be re-run without
+  paying for the Omni scores again.
+- **Two tools reported success while running zero checks.** `verify-local-install.mjs` and
+  `qa-negative-control.mjs` both exited 0 after printing `skipped (0 checks run)` when
+  ffmpeg was absent — on the very machine the first one exists to check. They now exit 2
+  and say `NOT VERIFIED`, so "could not check" is no longer the same status as "checked and
+  clean".
+- **The CI import check could pass vacuously.** Its regex was anchored to a single-quoted,
+  single-line `import ... from '...'`, so double quotes, multi-line import lists,
+  `export ... from` and dynamic `import()` were all missed — a real third-party dependency
+  in any of those shapes would still have reported "node builtins only". The pattern now
+  covers all four shapes and fails if it matches nothing at all.
+- **A CI assertion that could never fail.** `$output -notmatch 'falls back to PowerShell'`
+  tested for the check's own NAME, which is printed whether it passes or fails. It now
+  requires a `PASS` line for that check.
+- **Three `build.mjs` footguns.** `clip` with no scene name fell through to the same code
+  as `build` and therefore ran 16 paid syntheses, overwriting every bundled clip — it now
+  refuses and bills nothing. `--dry-run` created the `tmp/`, `preview/` and `clips/`
+  directories and wrote one temp file per scene despite promising to write nothing. And
+  `audition --lang en` was silently swallowed by the flag parser, so it auditioned every
+  candidate instead of the English ones; it is now rejected with an explanation.
 - **Every sub-command was unreachable by typing.** `/voice-alerts` on its own worked, so
   the command looked healthy, but `on`, `off`, `status`, `test <scene>` and `lang <zh|en>`
   could not be invoked at all: typing a space after the command name submitted the whole

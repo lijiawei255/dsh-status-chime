@@ -107,7 +107,10 @@ function fail(message) {
   process.exit(1);
 }
 
-for (const dir of [TMP_DIR, PREVIEW_DIR, CLIPS_DIR]) mkdirSync(dir, { recursive: true });
+// Only when something is actually going to be written: `--dry-run` promises to
+// "print the commands without running them or writing files", and creating these
+// directories up front broke that promise.
+if (!dryRun) for (const dir of [TMP_DIR, PREVIEW_DIR, CLIPS_DIR]) mkdirSync(dir, { recursive: true });
 
 if (!existsSync(CLIPS_JSON)) fail(`missing source of truth: ${CLIPS_JSON}`);
 const config = JSON.parse(readFileSync(CLIPS_JSON, 'utf8'));
@@ -216,7 +219,9 @@ function resolveFfmpeg() {
 /** Synthesize one clip through Bailian TTS. The line travels in a UTF-8 file. */
 function synthesize({ id, model, voice, text, instruction, rate, pitch, volume, format, sampleRate, language, out }) {
   const textFile = join(TMP_DIR, `${id}.txt`);
-  writeFileSync(textFile, text, 'utf8');
+  // Not written when dry: this happens before run(), so the old code wrote a temp
+  // file per scene even though --dry-run says it writes nothing.
+  if (!dryRun) writeFileSync(textFile, text, 'utf8');
 
   const argv = [
     BAILIAN_CLI,
@@ -278,6 +283,13 @@ function cmdVoices() {
 }
 
 function cmdAudition(only) {
+  // `--lang` is meaningless here and used to be swallowed silently by positional(),
+  // so `audition --lang en` looked like "audition the English candidates" while it
+  // actually auditioned every candidate. Each candidate declares its own language
+  // (see `voices`); say so instead of quietly doing the opposite.
+  if (argValue('--lang') !== undefined) {
+    fail('audition does not take --lang: a candidate carries its own language (run `voices` to see them). Use `build --lang <code>` to render one language.');
+  }
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) fail('ffmpeg not found; it is needed for loudness normalisation and transcoding.');
   const candidates = config.voiceCandidates ?? [];
@@ -363,9 +375,21 @@ switch (mode) {
     cmdAudition(positional(0));
     break;
   case 'build':
-  case 'clip':
     cmdBuild(positional(0));
     break;
+  case 'clip': {
+    // `clip` names ONE scene, so a missing name must not silently mean "all of them".
+    // It used to fall through to the same code path as `build`, which meant a typo
+    // like `node scripts/build.mjs clip` ran 16 paid syntheses and overwrote every
+    // bundled clip — the exact "bare invocation" footgun the `clip <scene>` usage
+    // line and the guard on `mode` were added to prevent.
+    const scene = positional(0);
+    if (scene === undefined) {
+      fail('clip needs a scene name: node scripts/build.mjs clip <scene>. Nothing was generated, nothing was billed.');
+    }
+    cmdBuild(scene);
+    break;
+  }
   case null:
     // Print usage rather than synthesising: see the note on `mode` above.
     log('usage: node scripts/build.mjs <subcommand> [--dry-run]');
