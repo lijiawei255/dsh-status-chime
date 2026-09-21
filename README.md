@@ -121,9 +121,11 @@ Clip sets: zh (active): all clips present  |  en: all clips present
 | **npm 包 / GitHub 仓库** | `dsh-status-chime` |
 | **斜杠命令** | `/voice-alerts` |
 | **日志前缀** | `[voice-alerts]` |
-| **配置文件** | `$DSH_HOME/voice-alerts/voice-alerts.config.json` |
+| **配置文件** | `$DSH_HOME/voice-alerts.config.json`（主路径） |
 | **音频目录** | `$DSH_HOME/voice-alerts/clips/` |
 | **cordis id** | `voice-alerts` |
+
+> 配置还有一个**兼容用的旧位置** `$DSH_HOME/voice-alerts/voice-alerts.config.json`。插件只读**先找到的那一个**（先查主路径），所以：如果主路径的文件已存在，你改旧位置那个文件会被**静默忽略**。`/voice-alerts lang` 和 `on/off` 都会写到主路径。拿不准时看启动日志里的 `config <路径>` 那一行。
 
 **包名在 0.3.0 从 `dsh-voice-alerts` 改成了 `dsh-status-chime`**（原来的名字和社区目录里另一个插件只差一个字母，会被市场规则隐藏）。改名**只动包名和仓库名**：命令、配置路径、日志前缀全都还是 `voice-alerts`，所以老用户升级不会坏。
 
@@ -160,7 +162,7 @@ dsh plugin --profile <PROFILE> add .\dsh-status-chime
 dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
 ```
 
-升级 pnpm 到 10 以上也能绕过。详见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 11 条。
+（实测过的是：pnpm 9 会报错、pnpm 11.8.0 正常；**pnpm 10 没测过**。所以最稳的是加 `-w`。）详见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 11 条。
 
 **装完必须完全重启 DSH Desktop**，否则插件不会加载。
 
@@ -184,7 +186,16 @@ dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
 dsh plugin --profile <PROFILE> remove dsh-status-chime
 ```
 
-卸载**不会**删除 `$DSH_HOME/voice-alerts/`（配置、音频、质检报告都在那儿）。想彻底清干净就手动删掉那个目录。同样需要**完全重启 DSH Desktop** 才生效。
+卸载**不会**删除你 `$DSH_HOME` 下的东西。想彻底清干净，删这两处：
+
+```powershell
+# 音频、play.ps1、clips.json
+Remove-Item -Recurse -Force "$env:USERPROFILE\.dsh\voice-alerts"
+# 运行时配置（配置**不在**上面那个目录里，是同级的一个文件）
+Remove-Item -Force "$env:USERPROFILE\.dsh\voice-alerts.config.json"
+```
+
+质检报告不在 `$DSH_HOME` 下——它写在**仓库/包目录**的 `qa/report.md`。同样需要**完全重启 DSH Desktop** 才生效。
 
 ## 它怎么工作
 
@@ -220,7 +231,7 @@ DSH 事件  ──▶  lib/index.js  ──▶  聚合 / 节流 / 优先级  ─
 `tools/qw_local_omni.py` 把**多段候选音频一次性**交给 Qwen-Omni，让它横向比较并按维度打分：
 
 ```powershell
-python tools/qw_local_omni.py preview/en-loongmary.mp3 preview/en-loongeva_v3.6.mp3 preview/en-longanyuanfei.mp3 `
+python tools/qw_local_omni.py preview/flash-mary-en.mp3 preview/flash-eva-en.mp3 preview/flash-yuanfei-en.mp3 `
   --message "横向比较这几段录音，按清晰度/自然度/音色/干净度打分并排序"
 ```
 
@@ -374,6 +385,8 @@ node scripts/qa.mjs clips                # 质检
 ## 验证状态
 
 我一向觉得，把「写过」和「验证过」分开讲清楚，比含糊地说「功能完整」有用得多。所以逐条列出，并且**明确写出验证的边界**。
+
+下面这张表是摘要。**逐条的原始证据、测量值、以及「没验证到哪一步」都记在 [`docs/verification.md`](docs/verification.md)** —— 想核对任何一个数字就去看那份。
 
 ### 验证边界（请先读这一段）
 

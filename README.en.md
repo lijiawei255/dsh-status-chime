@@ -120,9 +120,11 @@ This is the easiest thing to trip over, so it is worth stating plainly:
 | **npm package / GitHub repo** | `dsh-status-chime` |
 | **Slash command** | `/voice-alerts` |
 | **Log prefix** | `[voice-alerts]` |
-| **Config file** | `$DSH_HOME/voice-alerts/voice-alerts.config.json` |
+| **Config file** | `$DSH_HOME/voice-alerts.config.json` (the primary path) |
 | **Clip directory** | `$DSH_HOME/voice-alerts/clips/` |
 | **cordis id** | `voice-alerts` |
+
+> There is also a **legacy config location** kept for compatibility: `$DSH_HOME/voice-alerts/voice-alerts.config.json`. The plugin reads **whichever it finds first** (primary path first), so if the primary file already exists, edits to the legacy file are **silently ignored**. `/voice-alerts lang` and `on`/`off` write to the primary path. When in doubt, check the `config <path>` line in the startup log.
 
 **The package was renamed from `dsh-voice-alerts` to `dsh-status-chime` in 0.3.0** (the old name differed by one letter from an unrelated plugin in the community catalog, which the marketplace rules would have hidden). The rename touches **only the package and repository names**: the command, config paths and log prefix are all still `voice-alerts`, so an existing install keeps working.
 
@@ -159,7 +161,7 @@ This installs the package into the profile and registers it as a profile layer (
 dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
 ```
 
-Upgrading to pnpm 10 or newer also avoids it. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 11.
+(Measured: pnpm 9 rejects it, pnpm 11.8.0 accepts it, and **pnpm 10 was not tested** - so `-w` is the safer fix.) See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 11.
 
 **You must fully restart DSH Desktop afterwards**, otherwise the plugin is not loaded.
 
@@ -183,7 +185,16 @@ If you see `Voice alerts: on (v0.3.0)`, `Language: zh` and `Scenes (8)`, the ins
 dsh plugin --profile <PROFILE> remove dsh-status-chime
 ```
 
-Uninstalling does **not** delete `$DSH_HOME/voice-alerts/` — your config, clips and QA reports live there. Delete that directory by hand to remove everything. A **full DSH Desktop restart** is needed for the removal to take effect.
+Uninstalling does **not** delete anything under your `$DSH_HOME`. To remove it all, delete these two:
+
+```powershell
+# clips, play.ps1, clips.json
+Remove-Item -Recurse -Force "$env:USERPROFILE\.dsh\voice-alerts"
+# the runtime config (it is NOT inside that directory - it is a sibling file)
+Remove-Item -Force "$env:USERPROFILE\.dsh\voice-alerts.config.json"
+```
+
+QA reports are not under `$DSH_HOME` at all - they are written to `qa/report.md` inside the package directory. A **full DSH Desktop restart** is needed for the removal to take effect.
 
 ## How it works
 
@@ -219,7 +230,7 @@ Three concrete pieces:
 `tools/qw_local_omni.py` hands **several candidate clips at once** to Qwen-Omni and asks for a cross-comparison with per-dimension scores:
 
 ```powershell
-python tools/qw_local_omni.py preview/en-loongmary.mp3 preview/en-loongeva_v3.6.mp3 preview/en-longanyuanfei.mp3 `
+python tools/qw_local_omni.py preview/flash-mary-en.mp3 preview/flash-eva-en.mp3 preview/flash-yuanfei-en.mp3 `
   --message "Compare these recordings against each other: rate clarity, naturalness, voice character and cleanliness, and rank them."
 ```
 
@@ -375,6 +386,10 @@ The host process **cannot tell whether the window is focused** (DSH's native bri
 I find it more useful to separate "written" from "verified" than to claim vaguely that
 everything works. So, item by item — including an explicit statement of **where the
 verification stops**.
+
+The table below is the summary. **The per-item evidence, the measurements, and exactly how
+far each check was taken live in [`docs/verification.md`](docs/verification.md)** — go there
+to check any individual number.
 
 ### Verification boundary (read this first)
 
