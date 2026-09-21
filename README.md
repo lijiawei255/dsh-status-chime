@@ -421,9 +421,9 @@ node scripts/qa.mjs clips                # 质检
 | **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
 | **音频层** | 中英各 8 条、共 16 条**全部通过自动质检**（ASR 相似度 1.000、清晰/干净 10/10、无削波）。其中**中文那 8 条另做过逐条耳听确认**；**英文那 8 条没做过这一步**，只过了自动质检 |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
-| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**55 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、以及语言切换与回退 |
+| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**60 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、以及语言切换与回退 |
 | **语言层** | 默认中文、`lang en` 切换后确实改选英文文件（自测断言的是**解析到的文件名**，不只是状态文字）；配置里写无法识别的语言会**回退到中文**而不是静默 |
-| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、55 项自检、隐私扫描 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、60 项自检、隐私扫描 |
 
 关于 `approval` 的验证要说清楚边界：**触发时审批策略必须是 `ask`**。我本人是在 `ask` 策略下听到提示音的，但当时**无法区分**它走的是会话事件 `approval/asked` 还是兜底的作用域瀑布 `approval/request` —— 两条路径播同一条音。会话事件那条的**行为**由自检覆盖（含「子代理会话的审批不出声」），但它是否在生产环境中被派发，我没有单独取证过。
 
@@ -455,7 +455,7 @@ dsh-status-chime/
 ├── scripts/                      # 生成 / 质检 / 自检 / 负向验证 / 隐私扫描
 │   ├── build.mjs                 # 生成音频（支持 --lang）
 │   ├── qa.mjs                    # 质检（支持 --lang）
-│   ├── selftest.mjs              # 离线自测，55 项
+│   ├── selftest.mjs              # 离线自测，60 项
 │   ├── qa-negative-control.mjs   # 证明质检门槛真的会拦下坏音频
 │   ├── verify-local-install.mjs  # 验证已安装的单文件版本
 │   ├── scan-sensitive.mjs        # 隐私/措辞扫描

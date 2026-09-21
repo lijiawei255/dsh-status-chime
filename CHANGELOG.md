@@ -42,10 +42,10 @@ uses [Semantic Versioning](https://semver.org/).
   the resolved **file** and not merely the label.
 - **`docs/verification.md`** now records the per-item evidence, including the margin for each
   silence floor separately and the fixtures the negative control relies on.
-- The offline suite grew from 41 to **55 checks** across this and the previous release:
-  43 for the approval scene, then 50 with the seven language checks, 52 with the two
-  bracketed-language checks, 53 with the command-input guard, and 55 with the observed
-  asset-resolution and resolved-file checks — see Fixed.
+- The offline suite grew from 41 to **60 checks** across this and the previous release:
+  43 for the approval scene, 50 with the seven language checks, 52 with the two
+  bracketed-language checks, 53 with the command-input guard, 55 with the observed
+  asset-resolution and resolved-file checks, and 60 with the config-surface checks — see Fixed.
 
 ### Changed
 
@@ -73,6 +73,22 @@ uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`interrupt` was undone by its own fallback.** When a higher-priority alert cut in, the
+  plugin killed the clip that was playing — and a process killed on purpose reports
+  `code === null`, which is neither `0` nor `2`, so the `play.ps1` retry handler read it as
+  a broken script and **replayed the interrupted clip through the inline path**. The new
+  alert and the old one then overlapped. The same happened on unload, where `stop()` killed
+  a clip and immediately respawned it. Children we kill are now recorded, and their exit is
+  not treated as a failure. Found by adding the coverage below, not by reading the code.
+- **Five config surfaces had no test behind them**, so nothing guarded them: a scene
+  disabled with `scenes.<name>.enabled = false` (now asserted to read as `off` AND to stay
+  silent when its event fires), `watchApprovals: false` (the approval event must not
+  speak), an install whose only config file is the legacy one (the plugin must read it —
+  and that is the file `on`/`off`/`lang` then write back to), and a `play.ps1` that exits
+  non-zero (must fall back to the inline `-EncodedCommand`). The fixtures for the
+  resolution-order checks also now copy **real** packaged clips instead of writing the
+  string `placeholder`: those files really get played, and undecodable audio made `play.ps1`
+  exit non-zero, which silently consumed the one-shot retry warning the last check depends on.
 - **The suite now observes what was actually resolved, instead of only the plugin's own
   log prose.** A play used to be reported as `playing <scene>`, which cannot tell the
   Chinese clip from the English one, mp3 from wav, or a user override from the packaged

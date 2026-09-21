@@ -22,7 +22,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -587,11 +587,19 @@ check('forcing PowerShell picks the .wav and plays (SoundPlayer cannot read mp3)
 // by construction and passed no matter what the plugin actually resolved.
 const USER_CLIPS = join(SANDBOX, 'voice-alerts', 'clips');
 const OVERRIDE_DIR = join(SANDBOX, 'override-clips');
-/** Write a placeholder with BOTH extensions, so the test does not depend on the backend. */
+/**
+ * Put a copy of a real packaged clip into an override directory, in both extensions so
+ * the test does not depend on the backend.
+ *
+ * It must be REAL audio, not a placeholder string: these files actually get played, and
+ * a file the player cannot decode makes `play.ps1` exit non-zero — which burns the
+ * one-shot `ps-file-fallback` warning that the -EncodedCommand retry test relies on.
+ */
 const placeBoth = (dir, scene) => {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${scene}.mp3`), 'placeholder', 'utf8');
-  writeFileSync(join(dir, `${scene}.wav`), 'placeholder', 'utf8');
+  for (const ext of ['mp3', 'wav']) {
+    copyFileSync(join(REPO_ROOT, 'assets', 'clips', `${scene}.${ext}`), join(dir, `${scene}.${ext}`));
+  }
 };
 const playAndRead = async (scene) => {
   mark = markNow();
@@ -675,6 +683,76 @@ await sleep(60);
 const forcedMissing = await commandDef.handler({ rawInput: 'test turn-done' });
 check('an explicitly requested but absent ffplay fails loudly instead of switching backends',
   forcedMissing.kind === 'error', forcedMissing.text.replace(/\n/g, ' / '));
+
+// ── config surfaces the suite never touched ──────────────────────────────
+// Each of these is a real config knob that had no check behind it at all. They run last
+// and each restores what it changed, because `rewriteSandboxConfig` composes from the
+// ORIGINAL config every time (see the note on that helper) and the legacy-file check has
+// to move a file that the others depend on.
+
+// (a) A disabled scene must be reported as off AND skipped when its event fires.
+rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS, scenes: { 'turn-done': { enabled: false } } });
+await sleep(60);
+const disabledStatus = await commandDef.handler({ rawInput: 'status' });
+check('a scene disabled in the config is reported as off',
+  disabledStatus.text.includes('turn-done=off'),
+  (disabledStatus.text.split('\n').find((l) => l.startsWith('Scenes')) ?? '(no Scenes line)').slice(0, 96));
+mark = markNow();
+emitTurn('completed');
+await sleep(QUIET);
+check('a scene disabled in the config does not play when it fires',
+  chosenSinceMark(mark).length === 0,
+  chosenSinceMark(mark).join(',') || '(silent)');
+
+// (b) `watchApprovals: false` must silence the approval scene.
+rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS, watchApprovals: false });
+await sleep(60);
+mark = markNow();
+fireChild('sessions', 'session/event', { header: { id: 's-approval-off', origin: 'root' } },
+  { type: 'approval/asked', data: { id: 'a-off' } });
+await sleep(QUIET);
+check('with watchApprovals off, an approval request stays silent',
+  chosenSinceMark(mark).length === 0,
+  chosenSinceMark(mark).join(',') || '(silent)');
+
+// (c) Only the LEGACY config file present: the plugin must read that one. This is the
+// shape of an upgraded install, and it is also where `on`/`off`/`lang` write back to.
+const PRIMARY_CONFIG = join(SANDBOX, 'voice-alerts.config.json');
+const LEGACY_DIR = join(SANDBOX, 'voice-alerts');
+const LEGACY_CONFIG = join(LEGACY_DIR, 'voice-alerts.config.json');
+mkdirSync(LEGACY_DIR, { recursive: true });
+const savedPrimary = readFileSync(PRIMARY_CONFIG, 'utf8');
+rmSync(PRIMARY_CONFIG, { force: true });
+writeFileSync(LEGACY_CONFIG,
+  JSON.stringify({ ...sandboxConfig, player: 'powershell', clipsDir: SILENT_CLIPS, language: 'en' }, null, 2), 'utf8');
+configStamp += 5;
+utimesSync(LEGACY_CONFIG, configStamp, configStamp);
+await sleep(60);
+const legacyStatus = await commandDef.handler({ rawInput: 'status' });
+check('with only the legacy config file present, the plugin reads it',
+  legacyStatus.text.includes('Language: en'),
+  (legacyStatus.text.split('\n')[1] ?? '').trim());
+rmSync(LEGACY_CONFIG, { force: true });
+writeFileSync(PRIMARY_CONFIG, savedPrimary, 'utf8');
+configStamp += 5;
+utimesSync(PRIMARY_CONFIG, configStamp, configStamp);
+await sleep(60);
+
+// (d) A `play.ps1` that exits non-zero must fall back to the inline -EncodedCommand.
+const BAD_PS1 = join(SANDBOX, 'bad-play.ps1');
+writeFileSync(BAD_PS1, 'exit 3', 'utf8');
+rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS, playPs1Path: BAD_PS1 });
+await sleep(60);
+mark = markNow();
+await commandDef.handler({ rawInput: 'test turn-done' });
+// Generous: this waits for a real PowerShell process to start, run a script and exit.
+await sleep(4000);
+check('a play.ps1 that exits non-zero falls back to the inline -EncodedCommand',
+  sawSinceMark(mark, 'EncodedCommand'),
+  warnLogs.slice(mark.warn).slice(-1)[0] ?? '(no warning logged since mark)');
+
+rewriteSandboxConfig({ player: 'powershell', clipsDir: SILENT_CLIPS });
+await sleep(60);
 
 // ── summary ──────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.ok);
