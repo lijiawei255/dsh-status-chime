@@ -489,12 +489,20 @@ await sleep(QUIET);
 // The file-level assertion the docs always claimed but no test performed: with `en`
 // active the plugin must resolve the ENGLISH clip. A scene-name-only check cannot
 // tell `turn-done.en.mp3` from `turn-done.mp3`, which is the whole point of the switch.
+//
+// The extension is derived from the backend that actually played, NOT hardcoded: a
+// runner with no ffplay falls back to PowerShell, which needs `.wav`. Asserting `.mp3`
+// made this check pass here (ffplay on PATH) and fail in CI, which is the same
+// environment-dependence this work set out to remove.
 const resolvedEn = playedFileSinceMark(mark, 'turn-done');
+const expectedEnFile = resolvedEn === null
+  ? null
+  : `turn-done.en.${resolvedEn.backend === 'ffplay' ? 'mp3' : 'wav'}`;
 check('with en active, the ENGLISH clip is the file that plays',
-  resolvedEn !== null && resolvedEn.file === 'turn-done.en.mp3',
+  resolvedEn !== null && resolvedEn.file === expectedEnFile,
   resolvedEn === null
     ? (playedSinceMark(mark).join(',') || logSinceMark(mark).slice(-1)[0] || '(no log)')
-    : resolvedEn.file);
+    : `${resolvedEn.file} via ${resolvedEn.backend}`);
 
 const badLang = await commandDef.handler({ rawInput: 'lang klingon' });
 check('/voice-alerts lang rejects an unknown language',
