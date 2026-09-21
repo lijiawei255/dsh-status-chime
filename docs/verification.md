@@ -57,6 +57,15 @@ and passed the quality gate (`scripts/qa.mjs clips --lang zh|en`):
 | Chinese duration gradient | 7.97 / 5.95 / 4.78 / 3.00 / 2.59 / 2.16 / 2.09 / 1.58 s |
 | English duration gradient | 7.90 / 6.46 / 4.85 / 3.00 / 2.59 / 2.16 / 2.09 / 1.92 s |
 
+**The English ASR figure needed a correction, and here it is.** `runAsr()` hardcoded
+`--lang zh` for every clip, English ones included, so the English set's "objective hard
+gate" was not the measurement this row presents it as. The hint now follows each clip, and
+the eight English clips were re-measured with `--lang en`
+(`node scripts/qa.mjs asr --lang en`, one paid request per clip): **1.000 on all eight**,
+transcripts matching the intended lines. `qa.mjs asr [--lang <code>]` was added so this can
+be re-run without paying for the Omni scores a second time. The Chinese eight were unaffected
+by the bug and were not re-run.
+
 The English gradient is monotonic in the same severity order as the Chinese. What the
 length actually separates is the **three urgency bands**, not each clip from its neighbour:
 
@@ -85,7 +94,8 @@ gate only.
 | Claim | How it was checked |
 |---|---|
 | Chinese is the default | `clips.json` `defaultLanguage` is `zh`; the bare `<scene>.mp3` name is what resolves with no config |
-| `/voice-alerts lang en` selects English | The offline suite asserts the **resolved filename** ends in `.en.mp3`, not merely that the status text changed |
+| `/voice-alerts lang en` selects English | The offline suite asserts the **resolved file name** — `turn-done.en.mp3`, or `.en.wav` when the PowerShell backend is what will play it; the extension is derived from the backend that actually started, not hardcoded, because the CI runner has no ffplay. A scene-name-only check could not tell `turn-done.en.mp3` from `turn-done.mp3` |
+| The playback log names what was chosen | Every play line ends with `[<file> via <backend> from <source>]`, where `<source>` is `clipsDir`, `user` or `package`. The three resolution levels are asserted from it, which is what makes "a user-level file takes precedence" checkable — before, it was "checked" by a local probe that searched its own hardcoded array and passed by construction |
 | The switch survives a restart | `lang en` writes `language` into the config file; the suite re-reads the file and asserts the value |
 | An unknown language does not mute the plugin | Setting `language: "klingon"` falls back to Chinese; asserted via `status` |
 | An unknown language is rejected on the command | `/voice-alerts lang klingon` returns an error naming the allowed values |
@@ -168,11 +178,13 @@ Measured with `scripts/selftest.mjs`, which forces each backend through the real
 
 | Check | Result |
 |---|---|
-| PowerShell path selects `.wav` and plays | ✅ the plugin resolves the wav and `PlaySync` blocks for the clip duration |
+| PowerShell path selects `.wav` | ✅ asserted from the play log itself: `turn-done.wav via powershell`. (That `PlaySync` blocks for the clip duration is the script's own doing and is not among these assertions) |
 | With ffmpeg absent, playback falls back automatically and still works | ✅ forcing `player: auto` with a bogus `ffplayPath` yields `Player: PowerShell SoundPlayer` and a successful playback |
 | An explicitly requested but missing ffplay fails loudly | ✅ it reports unavailable instead of silently switching backends |
+| A `play.ps1` that exits non-zero falls back to the inline `-EncodedCommand` | ✅ a script containing `exit 3` produces `play.ps1 exited with code 3; retrying once with -EncodedCommand.` |
+| Interrupting a clip does **not** replay it | ✅ **this was a real defect, found by adding the check above and not by reading the code.** A deliberately killed child exits with no code, which is neither 0 nor 2, so the retry handler read the interruption as a failed script and replayed the clip that had just been cut off — so `interrupt` was partly undone by its own fallback, and `stop()` on unload did the same. Children the plugin kills are now recorded and skipped |
 | Packaged clips resolve with no `clipsDir` configured | ✅ all eight found in `assets/clips/` |
-| A user-level file takes precedence over a packaged one | ✅ |
+| A user-level file takes precedence over a packaged one | ✅ asserted from the play log's `from user` marker — and `from clipsDir` when an explicit directory is set. Before this, the claim rested on a probe that searched its own hardcoded array and therefore passed whatever the plugin did |
 
 Measured startup overhead of the PowerShell path: roughly **0.4 s** on top of the clip
 duration (three runs of a 1.58 s clip took 2.00 / 1.94 / 2.00 s).
