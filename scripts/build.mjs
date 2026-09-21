@@ -399,7 +399,13 @@ switch (mode) {
     log('  build               synthesise every scene into mp3 + wav (calls the TTS API)');
     log('  clip <scene>        synthesise a single scene');
     log('');
+    log('  --lang <code>       build: render only this language (default: every declared language)');
+    log('  --root <dir>        project root (defaults to the repository this script lives in)');
     log('  --dry-run           print the commands without running them or writing files');
+    log('');
+    log('  VOICE_ALERTS_BAILIAN_CLI   path to bailian.mjs when npm\'s global prefix is unusual');
+    log('  VOICE_ALERTS_FFMPEG        explicit ffmpeg path (otherwise ffmpeg must be on PATH)');
+    log('  VOICE_ALERTS_ASR_MODEL     overrides the default ASR model used by qa.mjs');
     log('');
     log('Nothing was generated. Re-run with a subcommand to proceed.');
     break;

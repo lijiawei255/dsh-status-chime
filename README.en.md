@@ -36,7 +36,7 @@ More precisely it is **three bands**, not "each clip a notch longer than the nex
 | Waiting for you to act | 3.0s | `approval` |
 | Ended (or a simple question) | 1.6 – 2.6s | `job-done`, `goal-complete`, `needs-input`, `turn-done` |
 
-**Clips inside a band sit deliberately close**, because they are the same urgency: `goal-complete` (2.16s) and `needs-input` (2.09s) differ by **0.07s**, and the Chinese set differs by 0.07s too. **Length tells you the band, not which clip.**
+**Clips inside a band sit deliberately close**, because they are the same urgency: `goal-complete` (2.16s) and `needs-input` (2.09s) differ by **0.072s**, and the Chinese set differs by 0.072s too. **Length tells you the band, not which clip.**
 
 | Scene | Fires when | Chinese | English | Urgency |
 |---|---|---|---|---|
@@ -95,7 +95,7 @@ A literal translation of the Chinese runs long and flat in English, and **clip l
 
 The English durations run **1.92s → 7.90s**, monotonic in the same severity order as the Chinese. What the length actually separates is the **three urgency bands**: the step into the failed/blocked band is **38%** (3.00s → 4.85s). **Within a band the clips sit close on purpose** — `goal-complete` (2.16s) against `needs-input` (2.09s) is **0.072s**, and the Chinese set has the same near-tie. Length tells you the band, not which clip.
 
-> ⚠️ One trap worth recording: the English `turn-error` started at 16 words / 6.55s while `job-failed` was 6.46s — a 0.10s gap, **inaudible**. The Chinese pair differs by 2.02s (**25%** of the longer clip; every percentage in this file uses that convention). Lengthening the English error line to 19 words restored a 1.44s gap. **If you edit the copy, re-measure the durations** rather than trusting the word count.
+> ⚠️ One trap worth recording: the English `turn-error` started at 16 words / 6.55s while `job-failed` was 6.46s — a 0.09s gap, **inaudible**. The Chinese pair differs by 2.02s (**25%** of the longer clip; every percentage in this file uses that convention). Lengthening the English error line to 19 words restored a 1.44s gap. **If you edit the copy, re-measure the durations** rather than trusting the word count.
 
 The English set uses `loongmary` (a warm British voice) rather than having the Chinese voice read English. Three candidates were auditioned and ranked (`scripts/qa.mjs rank`; the output lands in `qa/`, which is not version-controlled — a repeat run kept the same order). The Chinese voice reading English scored lowest and was described as noticeably synthetic with unnatural rhythm: **naturalness 4/10, character 5/10** (the two are easy to mix up — `naturalness` is 4, `character` is 5).
 
@@ -124,7 +124,9 @@ This is the easiest thing to trip over, so it is worth stating plainly:
 | **Clip directory** | `$DSH_HOME/voice-alerts/clips/` |
 | **cordis id** | `voice-alerts` |
 
-> There is also a **legacy config location** kept for compatibility: `$DSH_HOME/voice-alerts/voice-alerts.config.json`. The plugin reads **whichever it finds first** (primary path first), so if the primary file already exists, edits to the legacy file are **silently ignored**. `/voice-alerts lang` and `on`/`off` write to the primary path. When in doubt, check the `config <path>` line in the startup log.
+> There is also a **legacy config location** kept for compatibility: `$DSH_HOME/voice-alerts/voice-alerts.config.json`. The plugin reads **whichever it finds first** (primary path first), so if the primary file already exists, edits to the legacy file are **silently ignored**.
+>
+> Writes go back to **the file it actually read** — that is, to the primary path when the primary file exists, otherwise to the legacy one; only when neither exists does it create the primary. So on an install that has only the legacy file, `/voice-alerts lang` and `on`/`off` update the **legacy** file, not the primary one. When in doubt, check the `config <path>` line in the startup log: it names the file that is really in use.
 
 **The package was renamed from `dsh-voice-alerts` to `dsh-status-chime` in 0.3.0** (the old name differed by one letter from an unrelated plugin in the community catalog, which the marketplace rules would have hidden). The rename touches **only the package and repository names**: the command, config paths and log prefix are all still `voice-alerts`, so an existing install keeps working.
 
@@ -179,6 +181,21 @@ If you see `Voice alerts: on (v0.3.0)`, `Language: zh` and `Scenes (8)`, the ins
 /voice-alerts
 ```
 
+> **`Language: zh` means the alerts will speak CHINESE.** Chinese is the default on
+> purpose — it is the plugin's primary audience — but you have to switch it yourself,
+> and nothing else in this walkthrough will tell you that:
+>
+> ```
+> /voice-alerts lang en
+> ```
+>
+> Run that **before** the preview above if you want English. Without it, an English
+> reader hears eight Chinese clips and understandably concludes the English audio is
+> missing or broken. It is not; both sets ship, and `status` lists both
+> (`Clip sets: zh: all clips present | en (active): all clips present`). See
+> [Two languages](#two-languages-chinese-default-and-english) for what the two sets
+> sound like.
+
 ### Uninstall
 
 ```powershell
@@ -194,7 +211,13 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.dsh\voice-alerts"
 Remove-Item -Force "$env:USERPROFILE\.dsh\voice-alerts.config.json"
 ```
 
-QA reports are not under `$DSH_HOME` at all - they are written to `qa/report.md` inside the package directory. A **full DSH Desktop restart** is needed for the removal to take effect.
+A **full DSH Desktop restart** is needed for the removal to take effect.
+
+⚠️ QA reports are not under `$DSH_HOME`, and they are **not shipped** either:
+`qa/report.md` is written by the development script `scripts/qa.mjs` into the `qa/`
+directory of a **repository checkout**. That directory is in `.gitignore` and is not in
+`package.json`'s `files`, so a plugin installed with `dsh plugin add` has no such file —
+running the quality gate means cloning the repository first.
 
 ## How it works
 

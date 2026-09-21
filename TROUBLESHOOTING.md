@@ -176,12 +176,17 @@ root … if you really meant it, make it explicit by running this command again 
 ```
 
 **Measured, not inferred:** pnpm **9** rejects the command; pnpm **11.8.0** accepts it as-is.
-Whether pnpm 10 works was not tested. The reliable fix is the `-w` flag, which works
-regardless of version, since `dsh plugin` forwards arguments verbatim:
+Whether pnpm 10 works was not tested. The documented fix is the `-w` flag, since
+`dsh plugin` forwards arguments verbatim:
 
 ```powershell
 dsh plugin --profile <PROFILE> add -w <package>
 ```
+
+⚠️ **`-w` on pnpm 9 is not verified by this project.** This repository's own CI runs pnpm
+11 and *refuses* pnpm below 10, so the combination users on pnpm 9 would need — `-w` on
+pnpm 9 — is never exercised here. If `-w` does not work for you on pnpm 9, upgrading pnpm
+is the path that is actually tested.
 
 Note that this is a pnpm/DSH interaction, not a defect in this plugin: the same command
 fails for any package.
