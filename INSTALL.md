@@ -186,3 +186,9 @@ are not part of the package and can be left in place or deleted.
 - **Do not add `ffplay`/`ffmpeg` as a requirement.** It is optional by design.
 - **Do not hand-write `<PROFILE>/package.json` with a BOM** (see Step 2).
 - **Do not report success on the log line alone.** Ask the user whether they heard it.
+- **Do not attach a `.tgz` to a Release unless you will keep it current.** The marketplace
+  entry deliberately declares no `tarball:`, so storefronts install from source and users
+  always get the current `main` — which is why repository updates reach them with no change
+  to the entry. A tarball is a *snapshot*: it goes stale the moment the next commit lands,
+  and the entry then has to be updated alongside it. (The audio files attached to a Release
+  for listening are not an install artifact and are deliberately outside this rule.)

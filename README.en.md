@@ -58,7 +58,13 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 
 `approval` only fires under the `ask` approval policy; under `never` nothing is waiting for you, so nothing is spoken. It listens on the **`approval/asked` session event**, which is always emitted under `ask`, with the scoped `approval/request` waterfall kept as a fallback. Both paths play the same clip.
 
-Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) page, where they can be played directly.
+Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the
+[v0.3.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/latest) as **16
+audio files** — the bare names are **Chinese** (the default set) and the `.en` names are English.
+
+⚠️ Those attachments are **for listening only, not an install artifact**. Install with
+`dsh plugin add`; the package already contains all 32 files (16 clips × mp3 + wav), so
+nothing needs downloading from the release.
 
 ## Two languages: Chinese (default) and English
 

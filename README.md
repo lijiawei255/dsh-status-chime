@@ -59,7 +59,9 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 `approval` 只在审批策略为 `ask`（需要人工确认）时才会响 —— 策略是 `never` 时没有任何东西在等你，自然也不该出声。它监听的是**会话事件 `approval/asked`**，这条在 `ask` 策略下必定派发；另外还挂了作用域瀑布 `approval/request` 作兜底，两条路径播的是同一条音。
 
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
-见 [Releases](https://github.com/lijiawei255/dsh-status-chime/releases) 页面的音频附件。
+见 [v0.3.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/latest) 的 **16 个音频附件**——**不带后缀的是中文**（默认那套），带 `.en` 的是英文。
+
+⚠️ 那些附件**只是试听用的，不是安装产物**：安装走 `dsh plugin add`，插件包里本来就带了全部 32 个文件（16 条 × mp3 + wav），不需要从 Release 下载任何东西。
 
 ## 两种语言：中文（默认）和英文
 
