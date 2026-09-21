@@ -138,7 +138,19 @@ const OMNI_PROMPT = [
 ].join('\n');
 
 const args = process.argv.slice(2);
-const mode = args[0] ?? 'clips';
+/**
+ * The subcommand, or `null` when none was given.
+ *
+ * This used to default to `clips`, which meant that running the script to see
+ * what it does sent all 16 clips to the paid ASR and Omni endpoints. That is the
+ * same trap `build.mjs` already had fixed - it synthesised and overwrote the
+ * shipped audio on a bare invocation - and the fix was never mirrored here,
+ * because this script is the quieter of the two about it.
+ *
+ * `clips` is the most common mode, so it stays the default for the *branch* once
+ * a subcommand is given; it just is not assumed when none is.
+ */
+const mode = args[0] ?? null;
 
 /**
  * First non-flag argument after the subcommand, ignoring options and their values.
@@ -519,6 +531,23 @@ function cmdRank() {
 }
 
 // ── main ──────────────────────────────────────────────────────────────────
+// No subcommand: print usage and stop. Never default into a paid run.
+if (mode === null) {
+  process.stdout.write('usage: node scripts/qa.mjs <subcommand> [options]\n');
+  process.stdout.write('\n');
+  process.stdout.write('  clips                check every language\'s clips against clips.json (calls the paid ASR + Omni endpoints)\n');
+  process.stdout.write('  preview              check preview/*.mp3 against the audition line\n');
+  process.stdout.write('  rank                 send every preview clip to Omni at once, for a ranking\n');
+  process.stdout.write('  file <path> [text]   check a single file\n');
+  process.stdout.write('\n');
+  process.stdout.write('  --lang <code>        clips mode: only this language\n');
+  process.stdout.write('  --root <dir>         project root\n');
+  process.stdout.write('  --report <path>      where to write report.md\n');
+  process.stdout.write('\n');
+  process.stdout.write('Nothing was checked and nothing was billed. Re-run with a subcommand.\n');
+  process.exit(0);
+}
+
 if (mode === 'rank') {
   cmdRank();
   process.exit(0);

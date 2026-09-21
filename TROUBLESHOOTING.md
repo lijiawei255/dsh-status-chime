@@ -186,15 +186,22 @@ dsh plugin --profile <PROFILE> add -w <package>
 Note that this is a pnpm/DSH interaction, not a defect in this plugin: the same command
 fails for any package.
 
-## 12. `build.mjs` regenerated the bundled clips when I only meant to look
+## 12. A bare script invocation did something expensive when I only meant to look
 
-An older copy of this repository defaulted a bare `node scripts/build.mjs` to the build
-mode, so running it to see what the tool does triggered a real synthesis run and
-**overwrote every file in `assets/clips/`**, including the ones committed to the repo.
-There was no help text and no confirmation.
+**`build.mjs`**: an older copy defaulted a bare `node scripts/build.mjs` to the build mode, so
+running it to see what the tool does triggered a real synthesis run and **overwrote every file
+in `assets/clips/`**, including the ones committed to the repo. There was no help text and no
+confirmation. Fixed: a bare invocation prints usage and generates nothing. If you are on an
+older clone, either update, or use `git checkout assets/clips` to restore the shipped audio.
 
-Fixed: a bare invocation now prints usage and generates nothing. If you are on an older
-clone, either update, or use `git checkout assets/clips` to restore the shipped audio.
+**`qa.mjs`**: the same trap, and it survived the fix above for longer. A bare
+`node scripts/qa.mjs` defaulted to the `clips` mode, which sends all 16 clips to the **paid**
+ASR and Omni endpoints. Nothing is overwritten, but it costs money and quota — and it is
+exactly the thing you would run to find out how the script works. Fixed the same way: a bare
+invocation prints usage, exits 0, and bills nothing.
+
+Both now list their subcommands when run without one. If you are on an older clone and want
+to be safe, always pass a subcommand explicitly.
 
 ## 13. I switched to English (or Chinese) and some scenes went silent
 
