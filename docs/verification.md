@@ -137,18 +137,25 @@ appears to prefer the native-English voice, and UTMOS was trained largely on Eng
 It is advisory, not a gate: a predicted MOS is not a listening test.
 
 **Negative controls** (`scripts/qa-negative-control.mjs`) — offline, no API calls. It runs
-**8 assertions across the fixtures below**; two rows cover a pair of assertions each (a silent
-clip is checked against both floors, and both a stretched and a healthy clip are checked for a
-rate flag), which is why the table has fewer rows than the check count:
+**10 assertions across the fixtures below**; some rows cover a pair of assertions each (each
+silence fixture is checked against both floors, and both a stretched and a healthy clip are
+checked for a rate flag), which is why the table has fewer rows than the check count:
 
 | Injected defect | Expected | Result |
 |---|---|---|
-| Fully silent, plausible length | hard fail on both floors | ✅ `peak -91 dB is effectively silent` and the mean floor |
-| Very quiet but present (−46 dB sine) | fail the mean floor | ✅ `mean -67.6 dB is effectively silent` |
+| Fully silent, plausible length | hard fail on **both** floors | ✅ `peak -91 dB is effectively silent` + the mean floor |
+| Uniformly quiet (440 Hz sine at −46 dB) | fail **both** floors | ✅ `peak -64.3 dB` + `mean -67.6 dB` — the peak fires first, so this fixture cannot isolate the mean floor |
+| **Loud click, then silence** (20 ms burst, high crest factor) | fail the **mean** floor while the peak floor stays satisfied | ✅ `mean -41.5 dB is effectively silent`, with no peak failure — **this is the fixture that exercises the mean floor alone** |
 | Healthy shipped clip | no silence-floor trip | ✅ no false positive |
 | Speech slowed to 0.35× | rate outlier | ✅ `0.93 units/s (implausible)` |
 | Healthy shipped clip | no rate flag | ✅ `2.99 units/s` |
 | UTMOS not installed | reported, never failed | ✅ `UTMOS not available (…)` |
+
+The crest-factor fixture exists because the earlier version of this test did **not** isolate
+what it claimed: an attenuated sine has its peak below the peak floor too, so the assertion
+"fails the mean floor" passed on the strength of the **peak** floor alone and the mean floor
+was never exercised. The assertion now checks both halves — the mean fires *and* the peak
+does not — so the isolation is real rather than assumed.
 
 **Not verified:** that the gates catch every TTS failure mode. They catch silence, quiet
 clips, clipping, truncation, wrong or missing words, and gross rate drift. They do not

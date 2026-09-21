@@ -55,7 +55,7 @@ function silent(name, seconds) {
   if (r.status !== 0) throw new Error(`could not create ${name}`);
 }
 
-/** A quiet-but-present clip: above silence, far below the shipped clips. */
+/** A quiet-but-present clip: fails BOTH silence floors. */
 function veryQuiet(name, seconds) {
   const out = join(CLIPS, name);
   const r = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
@@ -64,15 +64,41 @@ function veryQuiet(name, seconds) {
   if (r.status !== 0) throw new Error(`could not create ${name}`);
 }
 
-// Scenes chosen so each fixture maps to one verdict:
-//   turn-done    silent, plausible length      -> must fail the silence floors
-//   needs-input  quiet but present            -> must fail the mean floor only
-//   approval     a real shipped clip          -> must pass (no false positive)
-//   job-done     real clip, padded with silence so its net rate collapses -> rate flag
+/**
+ * A high-crest-factor clip: a loud click followed by silence.
+ *
+ * This is the only fixture that isolates the MEAN floor. The quiet fixture above
+ * cannot do it - `sine` already runs near -18 dBFS, so attenuating it by 46 dB
+ * leaves the peak at about -64 dB and the peak floor fires first, which is how
+ * an earlier version of this test passed its "fails the mean floor" assertion
+ * without ever exercising the mean floor. Here the peak stays around -18 dB
+ * (well above the -30 dB peak floor) while the average over the whole clip falls
+ * to about -42 dB (below the -35 dB mean floor).
+ */
+function loudClickThenSilence(name) {
+  const out = join(CLIPS, name);
+  const r = spawnSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'sine=frequency=1000:duration=0.02', '-af', 'apad=pad_dur=2', '-b:a', '128k', out],
+  { windowsHide: true, stdio: 'ignore' });
+  if (r.status !== 0) throw new Error(`could not create ${name}`);
+}
+
+// Scenes chosen so each fixture maps to a distinct verdict:
+//   turn-done     silent, plausible length   -> must fail BOTH silence floors
+//   needs-input   quiet but present          -> must fail both floors (peak fires
+//                                               first; kept to show a uniformly
+//                                               quiet clip is caught)
+//   goal-blocked  loud click + silence       -> must fail the MEAN floor while the
+//                                               PEAK floor stays satisfied, which is
+//                                               the only way to exercise it alone
+//   approval      a real shipped clip        -> must pass (no false positive)
+//   job-done      real clip, slowed 0.35x    -> must be flagged as a rate outlier
 silent('turn-done.mp3', 1.58);
 silent('turn-done.wav', 1.58);
 veryQuiet('needs-input.mp3', 2.09);
 veryQuiet('needs-input.wav', 2.09);
+loudClickThenSilence('goal-blocked.mp3');
+loudClickThenSilence('goal-blocked.wav');
 
 const REAL = join(ROOT, 'assets', 'clips', 'approval.mp3');
 if (!existsSync(REAL)) {
@@ -105,6 +131,7 @@ writeFileSync(join(SANDBOX, 'assets', 'clips.json'), `${JSON.stringify({
   clips: {
     'turn-done': { text: '任务完成。', expect: '任务完成' },
     'needs-input': { text: '需要你回答。', expect: '需要你回答' },
+    'goal-blocked': { text: '目标受阻，需要你介入处理后才能继续。', expect: '目标受阻' },
     'approval': { text: '有操作等待你批准。', expect: '有操作等待你批准' },
     'turn-error': { text: '任务执行出错，本轮未能完成，请回到 DSH 查看错误详情。', expect: '任务执行出错' },
     'goal-complete': { text: '目标已完成。', expect: '目标已完成' },
@@ -148,9 +175,21 @@ check('a silent clip fails on both the peak and the mean floor',
   silentFailures ?? '(no block found)');
 
 const quietFailures = failuresFor('needs-input');
-check('a very quiet clip fails the mean floor',
-  quietFailures !== null && /mean .* effectively silent/.test(quietFailures),
+check('a very quiet clip fails both floors',
+  quietFailures !== null && (quietFailures.match(/effectively silent/g) ?? []).length === 2,
   quietFailures ?? '(no block found)');
+
+// The isolation test. A loud click followed by silence has a peak around -18 dB,
+// above the -30 dB peak floor, while its average sits near -42 dB, below the -35 dB
+// mean floor. Asserting BOTH halves is the point: without the "peak did not fire"
+// half, this would pass even if only the peak floor were doing the work.
+const crestFailures = failuresFor('goal-blocked');
+check('a loud click with a very low average fails the MEAN floor',
+  crestFailures !== null && /mean .* effectively silent/.test(crestFailures),
+  crestFailures ?? '(no block found)');
+check('...while its peak stays above the peak floor, so the mean floor is exercised alone',
+  crestFailures !== null && !/peak .* effectively silent/.test(crestFailures),
+  crestFailures ?? '(no block found)');
 
 const healthyFailures = failuresFor('approval');
 check('a healthy clip does NOT trip the silence floors (no false positive)',
