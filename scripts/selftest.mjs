@@ -476,6 +476,24 @@ const badLang = await commandDef.handler({ rawInput: 'lang klingon' });
 check('/voice-alerts lang rejects an unknown language',
   badLang.kind === 'error' && badLang.text.includes('Unknown language'));
 
+// The help text spells it `lang <zh|en>`; the brackets are placeholder notation, but
+// people copy them along. Typing them must still select the language rather than being
+// refused — that trap was hit for real, so it gets its own check.
+const langBracketed = await commandDef.handler({ rawInput: 'lang <en>' });
+const bracketPersisted = JSON.parse(readFileSync(join(SANDBOX, 'voice-alerts.config.json'), 'utf8')).language;
+check('/voice-alerts lang <en> is tolerated and selects en (the brackets are notation)',
+  langBracketed.kind === 'success' && bracketPersisted === 'en',
+  `kind=${langBracketed.kind} persisted=${bracketPersisted}`);
+
+// Tolerance is not a free pass: an unknown language in brackets is still refused, and
+// that is exactly when the explanatory hint is worth showing.
+const badBracketed = await commandDef.handler({ rawInput: 'lang <klingon>' });
+check('a bracketed unknown language is still refused, and the hint says why',
+  badBracketed.kind === 'error'
+  && badBracketed.text.includes('Unknown language')
+  && badBracketed.text.includes('placeholder notation'),
+  badBracketed.text.replace(/\n/g, ' / '));
+
 // An unknown value in the config must fall back, not silence the plugin.
 rewriteSandboxConfig({ language: 'klingon' });
 await sleep(60);

@@ -42,8 +42,9 @@ uses [Semantic Versioning](https://semver.org/).
   the resolved **file** and not merely the label.
 - **`docs/verification.md`** now records the per-item evidence, including the margin for each
   silence floor separately and the fixtures the negative control relies on.
-- The offline suite grew from 41 to **50 checks** across this and the previous release:
-  43 for the approval scene, then 50 with the seven language checks.
+- The offline suite grew from 41 to **52 checks** across this and the previous release:
+  43 for the approval scene, then 50 with the seven language checks, then 52 with the two
+  bracketed-language checks below.
 
 ### Changed
 
@@ -68,6 +69,16 @@ uses [Semantic Versioning](https://semver.org/).
   scene list that only ever looked for `<scene>.mp3`.
 - `qa.mjs` now takes `--lang <code>`, and reports speech time, units/s and UTMOS in its
   table. `VOICE_ALERTS_UTMOS_PYTHON` selects the interpreter that has `utmos-pytorch`.
+
+### Fixed
+
+- **`/voice-alerts lang <en>` no longer fails.** The help text spells the syntax
+  `lang <zh|en>`, where the angle brackets are placeholder notation — but people copy them
+  along, and `<en>` was then rejected as an unknown language while the error echoed the
+  brackets back, making it look like a valid value had been refused. A wrapping pair of
+  angle brackets, quotes or square brackets is now stripped before the value is judged.
+  This is a tolerance rather than a fuzzy match: anything still unrecognised is refused as
+  before, and when the input contained brackets the error now says what they are for.
 
 ## [0.2.0] — 2026-09-21
 
