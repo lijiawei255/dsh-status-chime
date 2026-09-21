@@ -32,9 +32,18 @@ uses [Semantic Versioning](https://semver.org/).
   Compared per language, because the predictor scores every English clip above every Chinese
   one and a cross-language comparison would be misleading. A missing install is reported,
   never treated as a failed clip.
-- **`scripts/qa-negative-control.mjs`**, an offline regression test that injects silence, a
-  very quiet clip and a stretched clip, then asserts the gates report them while a healthy
-  clip is left alone. No API calls, so it costs nothing to run.
+- **`scripts/qa-negative-control.mjs`**, an offline regression test that injects a fully
+  silent clip, a uniformly quiet one, a loud-click-then-silence one (high crest factor, the
+  only fixture that exercises the mean floor without the peak floor firing first) and a
+  slowed one, then asserts the gates report each while healthy clips are left alone. Ten
+  assertions, no API calls, so it costs nothing to run.
+- **`scripts/verify-local-install.mjs`**, which verifies an installed copy through the public
+  `/voice-alerts` command rather than a mock context, proving that switching language changes
+  the resolved **file** and not merely the label.
+- **`docs/verification.md`** now records the per-item evidence, including the margin for each
+  silence floor separately and the fixtures the negative control relies on.
+- The offline suite grew from 41 to **50 checks** across this and the previous release:
+  43 for the approval scene, then 50 with the seven language checks.
 
 ### Changed
 
@@ -77,6 +86,8 @@ uses [Semantic Versioning](https://semver.org/).
 - `approval/request` now plays the dedicated `approval` clip instead of reusing
   `needs-input`, so the two situations are distinguishable by ear.
 - The approval scene sits at priority 35, between `job-failed` (40) and `needs-input` (30).
+- The offline suite grew from 41 to **43 checks**, covering the new event mapping and
+  subagent filtering for approvals.
 
 ## [0.1.0] — 2026-09-21
 
