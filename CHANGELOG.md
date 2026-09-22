@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The READMEs now carry an **Awesome DSH Plugin** badge and a "Listed in" / 「收录」
+  section, recording that the plugin is listed in
+  [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
+  under the `notify` category
+  ([#5553](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5553), merged).
+
 ## [0.3.0] — 2026-09-21
 
 ### Added

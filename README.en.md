@@ -6,6 +6,7 @@
 
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)
 ![license](https://img.shields.io/badge/license-MIT-blue)
+[![Awesome DSH Plugin](https://img.shields.io/badge/Awesome%20DSH%20Plugin-listed-brightgreen)](https://awesome-dsh-plugin.com/notify/)
 
 ---
 
@@ -511,6 +512,16 @@ dsh-status-chime/
 
 `qa/`, `preview/` and `tmp/` are scratch directories the scripts write; they are in
 `.gitignore` and are not part of the package.
+
+## Listed in
+
+Included in **[Awesome DSH Plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)**
+under the `notify` category: [entry](https://awesome-dsh-plugin.com/notify/) ·
+[submission #5553](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5553) (merged).
+
+That list is human- and CI-reviewed rather than scraped: it requires a declared
+`dsh.bundle`, real working code, a repository at least one day old, and a **description
+that matches the code**.
 
 ## License
 

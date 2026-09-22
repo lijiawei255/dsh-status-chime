@@ -6,6 +6,7 @@
 
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)
 ![license](https://img.shields.io/badge/license-MIT-blue)
+[![Awesome DSH Plugin](https://img.shields.io/badge/Awesome%20DSH%20Plugin-%E5%B7%B2%E6%94%B6%E5%BD%95-brightgreen)](https://awesome-dsh-plugin.com/zh/notify/)
 
 ---
 
@@ -470,6 +471,12 @@ dsh-status-chime/
 ```
 
 `qa/`、`preview/`、`tmp/` 是脚本跑出来的中间产物，已在 `.gitignore` 里，不随仓库发布。
+
+## 收录
+
+已被 **[Awesome DSH Plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)** 收录，分类 `notify`：条目见[通知与集成](https://awesome-dsh-plugin.com/zh/notify/)，提交记录 [#5553](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5553)（已合并）。
+
+那个列表是**人工 + CI 审核制**，不是爬虫采集：要求仓库声明 `dsh.bundle`、含真实可运行的代码、仓库创建满 1 天，而且**条目描述必须和代码对得上**。
 
 ## 许可
 
