@@ -60,7 +60,9 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 `approval` 只在审批策略为 `ask`（需要人工确认）时才会响 —— 策略是 `never` 时没有任何东西在等你，自然也不该出声。它监听的是**会话事件 `approval/asked`**，这条在 `ask` 策略下必定派发；另外还挂了作用域瀑布 `approval/request` 作兜底，两条路径播的是同一条音。
 
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
-见 [v0.3.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/latest) 的 **16 个音频附件**——**不带后缀的是中文**（默认那套），带 `.en` 的是英文。
+见 [v0.4.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.0) 的 **16 个音频附件**——**不带后缀的是中文**（默认那套），带 `.en` 的是英文。
+
+链接钉在具体 tag 上而不是 `latest`，并且**每个 release 都重新附上这 16 个文件**：音频自 0.3.0 起一个字节都没变（0.4.0 只改了代码），所以每个版本页都能直接试听，不必依赖"某个旧版本还留着附件"。
 
 ⚠️ 那些附件**只是试听用的，不是安装产物**：安装走 `dsh plugin add`，插件包里本来就带了全部 32 个文件（16 条 × mp3 + wav），不需要从 Release 下载任何东西。
 
@@ -179,7 +181,7 @@ dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
 /voice-alerts status
 ```
 
-看到 `Voice alerts: on (v0.3.0)`、`Language: zh`、`Scenes (8)` 就说明装好了。想听一遍全部八条：
+看到 `Voice alerts: on (v0.4.0)`、`Language: zh`、`Scenes (8)` 就说明装好了。想听一遍全部八条：
 
 ```
 /voice-alerts
@@ -216,7 +218,7 @@ DSH 事件  ──▶  lib/index.js  ──▶  聚合 / 节流 / 优先级  ─
 |---|---|
 | `session/event` → `turn/start` / `user/message` / `turn/end` | 判断这一轮是不是你发起的，以及它是怎么结束的 |
 | `session/event` → `goal/change` | 目标的 `complete` 与 `block` |
-| `jobs.onJobDone` | 后台任务的 `completed` 与 `failed` |
+| `jobs.events.subscribe` → `settled` | 后台任务结束；`completed` 播、`failed` 播、`killed` 不播，`awaited`（已有等待者收走结果）与 `cause: 'teardown'`（退出/归档）也都不播 |
 | `tools/pre-execute` | 工具名命中 `waitingTools` 时，说明代理要停下来等你 |
 | `session/event` → `approval/asked` | **主路径**：审批策略为 `ask` 时必定派发 |
 | `approval/request` | **兜底**：作用域瀑布，同样只在 `ask` 下可能派发；两条路播同一条音 |
@@ -242,9 +244,9 @@ python tools/qw_local_omni.py preview/flash-mary-en.mp3 preview/flash-eva-en.mp3
   --message "横向比较这几段录音，按清晰度/自然度/音色/干净度打分并排序"
 ```
 
-拿到的是一个**排序**而不是一堆孤立分数——「A 比 B 更贴目标」这种相对判断，比「A 得 7 分」有用得多。实测给出的排序和理由相当具体：
+拿到的是一个**排序**而不是一堆孤立分数——「A 比 B 更贴目标」这种相对判断，比「A 得 7 分」有用得多。实测给出的排序和理由相当具体（下面是模型理由的概述）：
 
-> A4 是唯一一个在保持清晰稳重的基础上，做到了低沉与气声质感的音色。A2 虽然成熟但不够有辨识度，A5 略显平淡，A1、A3、A6 则因音色过亮或过嫩而被排除。
+> A4 在保持系统提示所需的清晰稳重之外，音色最贴合目标；A2 辨识度不足，A5 偏平淡，A1、A3、A6 则因音色过亮或偏年轻而被排除。
 
 **2. 用 ASR 转写回读做客观校验**
 
@@ -403,14 +405,16 @@ node scripts/qa.mjs clips                # 质检
 | 项 | 值 |
 |---|---|
 | 操作系统 | Windows 11 |
-| DSH | DSH Desktop 2.0.13，`@deepseek-ai/dsh` **0.1.5-rc.2** |
+| DSH | DSH Desktop（官方版），`@deepseek-ai/dsh` **0.1.7-rc.2** |
 | 该机器上的额外软件 | 装有 ffmpeg、Python 3、阿里云百炼 CLI |
+
+> 上一版（0.3.0）验证的是 **0.1.5-rc.2**。0.1.7 移除了 `jobs.onJobDone`，后台任务两个场景因此静默失效；0.4.0 就是为这件事发的——它改用 0.1.7 的 `jobs.events.subscribe`，同时保留对旧 API 的回退，所以 0.1.5/0.1.6 也照常可用。
 
 **这意味着**：
 
 - ✅ **代码正确性、事件映射、音频质量**——与本机装了什么无关，结论可迁移到你的机器。
 - ✅ **「干净 Windows 零依赖」**——保底播放器用的是 Windows 自带的 PowerShell 5.1 + .NET `System.Media.SoundPlayer`，两者都是 Win10/11 的**操作系统组件**；无 ffmpeg 的情形已通过模拟验证。
-- ⚠️ **DSH 版本**——**只在这个版本上验证过**。更高或更低的版本若改动了事件接口，某些场景可能不再触发。这是唯一真正未知、且我无法在本机消除的变数。
+- ⚠️ **DSH 版本**——**在 0.1.7-rc.2 与 0.1.5 系上验证过**（后者由自测的旧 API 阶段模拟，不是真机）。再往后的版本若又改事件接口，某些场景可能再次失效。这是唯一真正未知、且我无法在本机消除的变数。
 - ⚠️ **在一台完全干净的、别人的 Windows 上从 GitHub 安装**——**我没有第二台机器，没有实测过这一步**。CI（见下）在 GitHub 提供的干净 Windows 运行器上覆盖了「安装 + 加载 + 后端探测」，但**运行器没有声卡，无法验证声音真的到了扬声器**。
 
 如果你在别的 DSH 版本或别的机器上遇到问题，请提 Issue 并附上日志里的 `[voice-alerts] active …` 那一行（它会写明探测到的播放器和配置路径），那基本能一眼定位。
@@ -422,9 +426,9 @@ node scripts/qa.mjs clips                # 质检
 | **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
 | **音频层** | 中英各 8 条、共 16 条**全部通过自动质检**（ASR 相似度 1.000、清晰/干净 10/10、无削波）。其中**中文那 8 条另做过逐条耳听确认**；**英文那 8 条没做过这一步**，只过了自动质检 |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
-| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**63 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、以及语言切换与回退 |
+| **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**76 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、语言切换与回退，以及**新旧两代 jobs 事件 API 的探测与回退** |
 | **语言层** | 默认中文、`lang en` 切换后确实改选英文文件（自测断言的是**解析到的文件名**，不只是状态文字）；配置里写无法识别的语言会**回退到中文**而不是静默 |
-| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、63 项自检、隐私扫描 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、76 项自检、隐私扫描 |
 
 关于 `approval` 的验证要说清楚边界：**触发时审批策略必须是 `ask`**。我本人是在 `ask` 策略下听到提示音的，但当时**无法区分**它走的是会话事件 `approval/asked` 还是兜底的作用域瀑布 `approval/request` —— 两条路径播同一条音。会话事件那条的**行为**由自检覆盖（含「子代理会话的审批不出声」），但它是否在生产环境中被派发，我没有单独取证过。
 
@@ -434,11 +438,46 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 
 **`job-failed` 对「后台 shell 命令非零退出」实际不可达。**
 
-实测：一个以后台方式运行、`exit 7` 结束的命令，DSH 把它的状态记为 `completed`，于是播的是「后台任务完成」。原因是 job 快照里**没有退出码字段**，而 shell 后台任务的生产者只会产出 `completed` 或 `killed`；`failed` 保留给「后台**工具**任务报告错误」或生产方合约违约的情况。
+实测：一个以后台方式运行、`exit 7` 结束的命令，DSH 把它的状态记为 `completed`，于是播的是「后台任务完成」。原因是 job 的状态只有 `completed` / `killed` / `failed` 三种终态，而 shell 后台任务的生产者只会产出前两种；`failed` 保留给「后台**工具**任务报告错误」或生产方合约违约的情况。**这是框架行为，0.1.7 里依然如此**，不是本插件的实现问题。
 
-顺带一提：**DSH 自带的 `desktop-notifications` 用的是同一个 `status === 'failed'` 判断，所以它有完全一样的盲区**——这是框架行为，不是本插件的实现问题。
+0.1.7 新增了一个**可观察点**：job 详情里现在带 `exit code: N`，所以非零退出在日志里看得到了。但我**故意不去解析它**——那是写给人看的字符串，把它当契约，下次框架改措辞就会静默失效。想要「非零退出也响」的话，正确做法是让 DSH 把退出码变成状态字段，而不是在这里猜文本。
 
 这个场景**保留**了（它对工具任务失败是有效的），但它的触发**未被真实复现过**，只有代码层面的核对。你可以用 `/voice-alerts test job-failed` 验证音频本身没问题。
+
+### 0.4.0 修的是哪一处
+
+0.1.7 删掉了 `jobs.onJobDone`，而 0.3.0 只认它——所以升级到 0.1.7 之后，**`job-done` 与 `job-failed` 两个场景是静默失效的**，日志里连一行报错都不会有（异常被宿主按 fiber 吞掉了）。0.4.0 改成订阅 0.1.7 的 `jobs.events.subscribe({ owners: 'all' })` 提交流：
+
+- 只认 `settled`；`registered` / `progress` / `stopping` / `output` / `removed` 一律忽略。
+- `awaited: true`（已有等待者收走结果）与 `cause: 'teardown'`（会话归档、宿主退出）都**不出声**——否则每次关程序都会响一声，`job_wait` 也会重复播报。
+- 旧 API 仍然保留为回退分支：宿主没有 `events.subscribe` 时自动走 `onJobDone`，并在日志里说明用的是哪一条。两条分支都由自测覆盖。
+
+## 本地与开源：镜像，以及唯一允许的差异
+
+这个项目同时是两样东西：**别人下载安装的仓库**，和**我本机正在跑的那份**。两者一旦不一致，麻烦在于它不留痕迹——版本号还是同一个，代码已经变了，于是"我本地测过的"和"你下载到的"就不是一个东西。所以镜像被当成一条可执行的规则，而不是一个承诺。
+
+**逐字节镜像**（`node scripts/sync-profile.mjs --all --check` / `--apply`）：
+
+| 本地 | 仓库 |
+|---|---|
+| 单文件安装的 `<profile>/<name>.js` | `lib/index.js` |
+| `$DSH_HOME/voice-alerts/clips/**` | `assets/clips/**`（32 个音频） |
+| `$DSH_HOME/voice-alerts/play.ps1` | `assets/play.ps1` |
+
+这条规则不是摆设：这次就靠哈希抓出本地那份**落后三笔提交、还差一次宿主 API 迁移**，而两边版本号一模一样。
+
+**唯一允许的差异是措辞。** `$DSH_HOME/voice-alerts/clips.json` 是**私密母本**（措辞按我的原话写，不外发），仓库里的 `assets/clips.json` 是**同一批音频的中性描述**——**音频不重新生成**，32 个文件就是当初试听选中的那批。差异只允许落在：注释、试听候选清单（id / label / instruction）、`chosenCandidate` 名字、风格 instruction。
+
+**而且是机器可验的**：`sync-profile.mjs` 会把每一个差异字段路径分类，**功能性差异必须为 0**（模型、音色、rate、pitch、volume、format、sampleRate、`loudnorm`、以及每一句中英文案），非 0 直接以 exit 3 报出来，因为那种差异不是"措辞"，改不了也糊不过去。分类方向是保守的：**没被归类的字段一律算功能性**，所以新增字段不可能被当成"大概只是措辞"混过去。
+
+**禁用词表只存在本地**：`$DSH_HOME/voice-alerts.scan.json`（在任何 clone 之外），由 `node scripts/scan-sensitive.mjs .` 执行。扫描器**只报文件、行号、类别，绝不回显命中的内容**，所以它的输出可以安全贴进 Issue、CI 日志或对话——检查本身不会变成被检查内容的第二份拷贝。
+
+两点如实说明：
+
+- **CI 跑不了这道措辞闸门**——GitHub 运行器没有我的 `$DSH_HOME`，所以 CI 只应用内置规则（凭据、密钥形态、个人路径）。措辞规则保护的是我提交前的那一步。
+- **正向对照**：扫私密目录（`node scripts/scan-sensitive.mjs "$DSH_HOME/voice-alerts"`）**必须报命中**；如果它变干净了，说明本地规则没加载，闸门实际上开着。
+
+完整规则、逐项差异与"什么不算措辞差异"（`maturity` 是 `qa.mjs` 的评分维度名，保留）见 [`docs/mirror-policy.md`](docs/mirror-policy.md)。
 
 ## 目录结构
 
@@ -456,12 +495,14 @@ dsh-status-chime/
 ├── scripts/                      # 生成 / 质检 / 自检 / 负向验证 / 隐私扫描
 │   ├── build.mjs                 # 生成音频（支持 --lang）
 │   ├── qa.mjs                    # 质检（支持 --lang）
-│   ├── selftest.mjs              # 离线自测，63 项
+│   ├── selftest.mjs              # 离线自测，76 项
 │   ├── qa-negative-control.mjs   # 证明质检门槛真的会拦下坏音频
 │   ├── verify-local-install.mjs  # 验证已安装的单文件版本
+│   ├── sync-profile.mjs          # 让单文件本地安装与仓库保持一致（--check / --apply）
 │   ├── scan-sensitive.mjs        # 隐私/措辞扫描
 │   └── scan-sensitive.verify.mjs # 证明扫描器真的抓得到
 ├── docs/verification.md          # 逐条验证记录
+├── docs/mirror-policy.md         # 镜像规则：什么逐字节相同、什么只允许差措辞
 ├── .github/workflows/verify.yml  # CI：干净 Windows 上跑安装 + 自测 + 扫描
 ├── INSTALL.md                    # 给 Agent 看的安装步骤
 ├── TROUBLESHOOTING.md            # 没声音时的排查清单

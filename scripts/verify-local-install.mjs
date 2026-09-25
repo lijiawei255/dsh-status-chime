@@ -23,6 +23,14 @@
  *   every lookup — which is correct behaviour, but it means the two lookup checks
  *   cannot isolate anything. Rather than fail, they report SKIP with that reason.
  *
+ *   The decision is made by PROBING `<plugin dir>/../assets/clips`, which is the
+ *   directory the plugin itself resolves to, so the skip reason names a path that was
+ *   actually checked. It used to be inferred from the status text, comparing the
+ *   Clip-sets line against the marker the *Scenes* line uses — `(missing)` against
+ *   `missing` — so the test never matched, and both checks skipped on the single-file
+ *   install too: precisely the artifact they exist for. The observed evidence was
+ *   sitting in the skipped line's own detail the whole time.
+ *
  *   node scripts/verify-local-install.mjs --plugin <path to the installed .js>
  *   node scripts/verify-local-install.mjs --plugin lib/index.js     # repo build: 2 SKIPs
  */
@@ -151,18 +159,49 @@ check('the default language is zh',
   new RegExp(`${L.language.trim()}\\s*zh`).test(status.text),
   (status.text.split('\n').find((l) => l.includes(L.language)) ?? '(none)').trim());
 
-// The isolation checks. If packaged assets are reachable they rescue the lookup,
-// so the fixture cannot prove anything and these are skipped rather than failed.
-const zhMissing = status.text.includes(L.missing) && clipSetsLine().includes(L.missing);
-if (zhMissing) {
-  check('with zh active, a dir holding only English clips reports every scene missing',
-    clipSetsLine().includes(L.missing), clipSetsLine());
-  check('...while the English set reads as complete',
-    clipSetsLine().includes(L.complete), clipSetsLine());
-} else {
-  const reason = 'packaged assets are reachable, so clipsDir cannot isolate the lookup (expected for the repo build)';
+// The isolation checks. If packaged assets are reachable they rescue the lookup, so
+// the fixture cannot prove anything and these are skipped rather than failed.
+//
+// The probe mirrors the plugin's own `PACKAGE_ASSETS = <plugin dir>/../assets`, which is
+// what decides whether the third resolution level can answer. Deciding it from the status
+// text was the earlier bug: it looked for the Scene-line marker `(missing)` inside the
+// Clip-sets line, whose own wording is `missing` — so the branch never fired and both
+// checks skipped on the single-file install as well.
+const packagedClips = join(dirname(resolve(PLUGIN)), '..', 'assets', 'clips');
+const packagedReachable = existsSync(packagedClips);
+
+/**
+ * Split the Clip-sets line into per-language segments, keyed by code.
+ * The line is `<label>: <code>[ (active)]: <verdict>  |  <code>: <verdict>`, and the
+ * label is localised (`Clip sets:` / `语言音频`), so it is cut using the same string the
+ * locale detection already keyed on rather than guessed at.
+ */
+function clipSetSegments() {
+  const line = clipSetsLine();
+  const at = line.indexOf(L.clipSets);
+  const body = at >= 0 ? line.slice(at + L.clipSets.length) : line;
+  const out = {};
+  for (const segment of body.split('|')) {
+    const code = /^\s*([a-z]{2})\b/.exec(segment)?.[1];
+    if (code !== undefined) out[code] = segment;
+  }
+  return out;
+}
+
+if (packagedReachable) {
+  const reason = `packaged assets are reachable at ${packagedClips}, so clipsDir cannot isolate the lookup (expected for the repo build)`;
   skip('with zh active, a dir holding only English clips reports every scene missing', reason);
   skip('...while the English set reads as complete', reason);
+} else {
+  const segments = clipSetSegments();
+  const zhListed = SCENES.filter((scene) => (segments.zh ?? '').includes(scene));
+  const enListed = SCENES.filter((scene) => (segments.en ?? '').includes(scene));
+  check('with zh active, a dir holding only English clips reports every scene missing',
+    zhListed.length === SCENES.length && !(segments.zh ?? '').includes(L.complete),
+    segments.zh ?? '(no zh segment)');
+  check('...while the English set reads as complete',
+    enListed.length === 0 && (segments.en ?? '').includes(L.complete),
+    segments.en ?? '(no en segment)');
 }
 
 let out = await call('lang en');

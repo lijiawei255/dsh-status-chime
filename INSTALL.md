@@ -7,7 +7,9 @@
 > **Audience note for humans:** you probably want [README.md](README.md) instead. This
 > file is the same install, written as precise instructions so an agent gets it right.
 
-Verified against: DSH Desktop 2.0.x with `@deepseek-ai/dsh` 0.1.5-rc.2, on Windows 10/11.
+Verified against: DSH Desktop (official build) with `@deepseek-ai/dsh` 0.1.7-rc.2, on Windows
+10/11. The background-job scenes use 0.1.7's `jobs.events.subscribe` and fall back to the
+pre-0.1.7 `jobs.onJobDone` automatically, so 0.1.5/0.1.6 hosts keep working too.
 
 ---
 
@@ -101,7 +103,7 @@ Do not report success before this restart happens. Say explicitly:
 
 > Installation is done. Please fully quit and reopen DSH Desktop — the plugin only loads at
 > startup. After restarting, run `/voice-alerts status` in the chat box; you should see
-> `Voice alerts: on (v0.3.0)`.
+> `Voice alerts: on (v0.4.0)`.
 
 Only the config file (`$DSH_HOME/voice-alerts.config.json`) is hot-read. The plugin code is
 not.
@@ -161,6 +163,38 @@ message, then switch back. Otherwise verify the audio alone with
 
 **`job-failed`** cannot be triggered by a background shell command exiting non-zero; DSH
 records that as `completed`. See the README's verification section.
+
+**If both job scenes are silent**, read the load-time line that says which background-job API
+the plugin found (`jobs: listening on the settled stream …`, the `jobs.onJobDone` fallback, or
+the "job alerts are disabled" warning). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 10.
+
+---
+
+## Optional — keep a single-file local install in sync with the repository
+
+`dsh plugin add` installs the package itself, so that install can never drift from `lib/`.
+A **hand-copied single file** inside a profile (`name: './<name>.js'` in `cordis.patch.yml`)
+has nothing linking it to this repository, and will silently keep an older copy:
+
+```powershell
+node scripts/sync-profile.mjs --all --check     # PARITY or DRIFT, read-only
+node scripts/sync-profile.mjs --all --apply     # plugin file + audio assets
+```
+
+`--check` compares size and SHA-256, and says whether the profile's `cordis.patch.yml`
+actually references that file (an unreferenced copy is installed but inactive). After
+`--apply` on the **plugin file**, the full restart from Step 3 is required again — plugin code
+is not hot-loaded; audio assets are read per playback and need no restart.
+
+`--all` also mirrors `assets/clips/**` and `assets/play.ps1` into `$DSH_HOME/voice-alerts/`,
+and compares the published `assets/clips.json` with the private
+`$DSH_HOME/voice-alerts/clips.json`. It prints **which field paths** differ and never their
+values, and requires every *functional* path to be identical — a non-zero count exits 3. The
+two files it deliberately never writes are `clips.json` (the private master is authoritative)
+and `voice-alerts.config.json` (this machine's settings).
+
+See [docs/mirror-policy.md](docs/mirror-policy.md) for what is mirrored and why, and
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) item 10 for the job-API log lines.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-status-chime",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Spoken status alerts for DeepSeek Harness: say it out loud when a turn finishes, fails, a job ends, an approval is waiting, or the agent starts waiting for you. · DSH 语音状态提示：任务完成、出错、后台任务结束、等待批准、等待你回答时用声音提醒。",
   "license": "MIT",
   "type": "module",

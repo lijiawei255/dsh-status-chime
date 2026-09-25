@@ -2,17 +2,26 @@
 
 Work down this list in order. It is sorted by how often each cause actually happens.
 
-First, find the log:
+First, get at the log. The plugin writes to the **host process log**, which is stdout — so how
+you read it depends on how DSH was launched:
 
-```
-%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log
-```
+| How you run it | Where the `[voice-alerts] …` lines are |
+|---|---|
+| Any build, chat UI | Run `/voice-alerts status`. It reports the loaded version, the detected player, the config path and the per-language clip state — no log file needed, and its `Voice alerts: on (v0.4.0)` line is what proves which code is actually on disk |
+| CLI (`dsh`) started from a terminal | On stdout, in that terminal |
+| Official desktop app | Piped to the shell's own stdout; **there is no per-day host log file in this build**. The shell writes only crash reports, to `%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*.log` |
 
-Search it for `voice-alerts`. What you find there splits the problem in half immediately:
+Earlier builds — and third-party shells — did write `%APPDATA%\<shell>\logs\host\dsh-<date>.log`.
+If that file exists on your machine it is still worth reading; if it does not, that is expected
+now rather than a fault. (Measured on the official 0.1.7-rc.2 desktop build: the string
+`logs/host` appears nowhere in `app.asar`, and the host's stdout is piped to the shell with
+`child.stdout.pipe(process.stdout)` while only crash reports are persisted.)
+
+Search whatever you have for `voice-alerts`. What you find there splits the problem in half immediately:
 
 | Log line | Meaning |
 |---|---|
-| `[voice-alerts] active v0.3.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
+| `[voice-alerts] active v0.4.0 …` | The plugin loaded. If this line is missing entirely, see **1**. |
 | `playing <scene>` | The plugin started a player for that scene. If you still hear nothing, see **2** and **3**. |
 | `no <lang> audio for <scene>` | That language's clip file is missing. See **6**. |
 | `throttled <scene>` | The repeat-suppression window caught it. Normal behaviour. |
@@ -27,7 +36,7 @@ running DSH Desktop. You must fully quit and reopen the application.
 
 Check by running `/voice-alerts status` in the chat box:
 
-- `Voice alerts: on (v0.3.0)` → the new code is loaded.
+- `Voice alerts: on (v0.4.0)` → the new code is loaded.
 - Unknown command → the plugin is not loaded at all. Restart, and check for the
   `[voice-alerts] active` line in the log afterwards.
 
@@ -145,6 +154,15 @@ Two possibilities:
 Check the verification table in the README first — one scene, `job-failed`, is known to be
 unreachable for background shell commands, which is framework behaviour rather than a
 plugin bug.
+
+If **both** `job-done` and `job-failed` are dead while the other six scenes work, check which
+background-job API your DSH exposes. The plugin logs one of these on load:
+
+| Log line | Meaning |
+|---|---|
+| `jobs: listening on the settled stream ({ owners: 'all' })` | DSH ≥ 0.1.7, the current path. Job scenes are live. |
+| `this dsh exposes only jobs.onJobDone (the pre-0.1.7 API)` | DSH ≤ 0.1.6, the fallback path. Also live — but see below. |
+| `neither jobs.events.subscribe nor jobs.onJobDone exists on this dsh` | A DSH whose job event surface changed again. Job scenes are off; everything else still works. Please open an issue with this line. |
 
 For any other scene, confirm the audio path independently:
 

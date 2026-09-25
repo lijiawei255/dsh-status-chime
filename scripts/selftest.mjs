@@ -139,6 +139,18 @@ const listeners = new Map();
 const disposers = [];
 const injected = new Map();
 let commandDef = null;
+/**
+ * Which background-job API the mock host exposes. A module-level switch, so one
+ * suite can drive both host generations instead of asserting against a single
+ * remembered shape:
+ *   'events' — DSH >= 0.1.7: `ctx.jobs.events.subscribe(filter, listener)`
+ *   'legacy' — DSH <= 0.1.6: `ctx.jobs.onJobDone(listener)`, removed in 0.1.7
+ *   'none'   — neither, to check the plugin degrades instead of throwing
+ */
+let jobsMockMode = 'events';
+/** Every settled-stream subscription the plugin installed: { filter, listener }. */
+const jobSubscriptions = [];
+/** The `onJobDone` callback, in the legacy mode. */
 let jobDoneHandler = null;
 let failNextRegister = false;
 const infoLogs = [];
@@ -163,7 +175,30 @@ function buildChild(service) {
       listeners.get(key).push(fn);
       return () => {};
     },
-    ...(service === 'jobs' ? { jobs: { onJobDone: (fn) => { jobDoneHandler = fn; return () => {}; } } } : {}),
+    ...(service === 'jobs' ? {
+      jobs: jobsMockMode === 'events'
+        ? {
+          events: {
+            /**
+             * The real contract: the subscription is an effect of the accessing
+             * context and the returned disposer unregisters it. Both halves are
+             * modelled, because a plugin that forgets the disposer leaks a
+             * listener on unload and nothing else here would notice.
+             */
+            subscribe: (filter, listener) => {
+              const entry = { filter, listener };
+              jobSubscriptions.push(entry);
+              return () => {
+                const i = jobSubscriptions.indexOf(entry);
+                if (i >= 0) jobSubscriptions.splice(i, 1);
+              };
+            },
+          },
+        }
+        : jobsMockMode === 'legacy'
+          ? { onJobDone: (fn) => { jobDoneHandler = fn; return () => {}; } }
+          : {},
+    } : {}),
     ...(service === 'commands' ? {
       commands: {
         register: (def) => {
@@ -208,6 +243,34 @@ function makeCtx() {
 function fire(event, ...args) { for (const fn of listeners.get(event) ?? []) fn(...args); }
 function fireChild(service, event, ...args) {
   for (const fn of listeners.get(`child:${service}:${event}`) ?? []) fn(...args);
+}
+
+/**
+ * Settle one background job through the host's commit stream, the way
+ * `@deepseek-ai/dsh-jobs-local` does: a `settled` event carrying the job view,
+ * the settlement cause and whether a waiting caller already collected it.
+ *
+ * `extra` overrides any of those, which is what lets the suppression rules
+ * (`awaited`, `cause: 'teardown'`) and the ignored event types be exercised from
+ * one place instead of by hand-rolling an event object per check.
+ */
+function settleJob(status, extra = {}) {
+  for (const { listener } of [...jobSubscriptions]) {
+    listener({ type: 'settled', job: { status }, cause: 'producer', awaited: false, ...extra });
+  }
+}
+
+/**
+ * Detach every registration the mock host handed out, so a freshly applied
+ * plugin instance can be driven without the previous instance answering the
+ * same event. `listeners` is keyed per service for children, which is what makes
+ * this separable at all.
+ */
+function resetHost() {
+  injected.clear();
+  jobSubscriptions.length = 0;
+  jobDoneHandler = null;
+  for (const key of [...listeners.keys()]) if (key.startsWith('child:')) listeners.delete(key);
 }
 
 function markNow() { return { info: infoLogs.length, warn: warnLogs.length }; }
@@ -372,20 +435,59 @@ await sleep(QUIET);
 check('an approval in a subagent session stays silent', chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
 
 // ── background jobs ──────────────────────────────────────────────────────
+// DSH 0.1.7 replaced `jobs.onJobDone` with the registry's commit stream. The
+// checks below pin the stream's contract, not just the two scenes, because the
+// migration's whole risk is a subtly different event shape passing unnoticed.
+check('the job stream was subscribed with { owners: "all" }',
+  jobSubscriptions.length === 1 && jobSubscriptions[0].filter?.owners === 'all',
+  jobSubscriptions.length === 0 ? '(no subscription)' : JSON.stringify(jobSubscriptions[0].filter));
+
 mark = markNow();
-jobDoneHandler({ status: 'completed' });
+settleJob('completed');
 await sleep(QUIET);
 check('a job finishing -> job-done', chosenSinceMark(mark).includes('job-done'), chosenSinceMark(mark).join(',') || 'none');
 
 mark = markNow();
-jobDoneHandler({ status: 'failed' });
+settleJob('failed');
 await sleep(QUIET);
 check('a job failing -> job-failed', chosenSinceMark(mark).includes('job-failed'), chosenSinceMark(mark).join(',') || 'none');
 
 mark = markNow();
-jobDoneHandler({ status: 'killed' });
+settleJob('killed');
 await sleep(QUIET);
 check('a job you killed stays silent', chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
+
+// `awaited` means a waiting caller already collected the settlement, and
+// `cause: 'teardown'` means the owner is being destroyed rather than the work
+// ending. The host's own completion reporter skips both; a spoken alert that
+// did not would fire on every shutdown and duplicate every job_wait.
+mark = markNow();
+settleJob('completed', { awaited: true });
+await sleep(QUIET);
+check('a settlement a waiting caller already collected stays silent',
+  chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
+
+mark = markNow();
+settleJob('completed', { cause: 'teardown' });
+await sleep(QUIET);
+check('a teardown settlement (session archived, host exiting) stays silent',
+  chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
+
+// Only `settled` is a completion. The stream carries five other event types, and
+// treating any of them as an ending would speak while a job is still running.
+for (const type of ['registered', 'progress', 'stopping', 'removed']) {
+  mark = markNow();
+  for (const { listener } of [...jobSubscriptions]) {
+    listener({ type, job: { status: 'running' }, cause: 'producer', awaited: false });
+  }
+  await sleep(QUIET);
+  check(`a job '${type}' event stays silent`, chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
+}
+
+mark = markNow();
+for (const { listener } of [...jobSubscriptions]) listener({ type: 'output', id: 'x', total: 10 });
+await sleep(QUIET);
+check("a job 'output' event stays silent", chosenSinceMark(mark).length === 0, chosenSinceMark(mark).join(',') || 'none');
 
 // ── waiting for you ──────────────────────────────────────────────────────
 mark = markNow();
@@ -413,7 +515,7 @@ check('an ordinary tool stays silent and next() is still called', chosenSinceMar
 mark = markNow();
 emitTurn('completed', { origin: 'subagent', turn: 6, sessionId: 's-sub' });
 goalChange('complete', 's-sub2', 'subagent');
-jobDoneHandler({ status: 'failed' });
+settleJob('failed');
 await sleep(QUIET);
 const subagentOnly = chosenSinceMark(mark);
 check('subagent turns and goals stay silent (jobs have no session owner, so they do speak)',
@@ -427,9 +529,9 @@ check('a subagent asking a question stays silent', chosenSinceMark(mark).length 
 
 // ── coalescing and priority ──────────────────────────────────────────────
 mark = markNow();
-jobDoneHandler({ status: 'completed' });   // job-done, priority 20
+settleJob('completed');   // job-done, priority 20
 goalChange('block', 's-coal');             // goal-blocked, priority 45
-jobDoneHandler({ status: 'failed' });      // job-failed, priority 40
+settleJob('failed');      // job-failed, priority 40
 await sleep(QUIET);
 const coalesced = chosenSinceMark(mark);
 check('several events in one window collapse to the top-priority goal-blocked',
@@ -438,11 +540,11 @@ check('several events in one window collapse to the top-priority goal-blocked',
 // ── throttling ───────────────────────────────────────────────────────────
 await sleep(QUIET);
 mark = markNow();
-jobDoneHandler({ status: 'failed' });
+settleJob('failed');
 // The gap must exceed the coalescing window (100ms) so this is a separate batch,
 // yet stay under the throttle window (500ms) so it is throttled.
 await sleep(200);
-jobDoneHandler({ status: 'failed' });
+settleJob('failed');
 await sleep(QUIET);
 const throttled = playedSinceMark(mark);
 check('the per-scene throttle drops the repeat',
@@ -559,14 +661,14 @@ await sleep(60);
 const off = await commandDef.handler({ rawInput: 'off' });
 await sleep(80);
 mark = markNow();
-jobDoneHandler({ status: 'completed' });
+settleJob('completed');
 await sleep(QUIET);
 check('/voice-alerts off silences everything', off.kind === 'success' && chosenSinceMark(mark).length === 0);
 
 const on = await commandDef.handler({ rawInput: 'on' });
 await sleep(80);
 mark = markNow();
-jobDoneHandler({ status: 'completed' });
+settleJob('completed');
 await sleep(QUIET);
 check('/voice-alerts on restores it', on.kind === 'success' && chosenSinceMark(mark).includes('job-done'), chosenSinceMark(mark).join(',') || 'none');
 
@@ -796,9 +898,65 @@ check('the configured volume reaches the player that honours it',
     ? '(no play logged)'
     : `backend=${autoVolume.backend} volume=${autoVolume.volume} (ffplay would carry ${EXPECTED_VOLUME})`);
 
-// (f) Unloading the plugin must release the player. The mock keeps the disposers that
+// (f) The other two host generations. `jobs.onJobDone` was removed in 0.1.7, so a
+// plugin that only knows the stream drops job alerts on every older host, and one
+// that only knows the old callback — which is what this plugin did until now —
+// drops them on 0.1.7 silently. Each branch is driven on its own freshly applied
+// instance, because the point of the probe is that the plugin picks the API the
+// host actually has.
+const savedCommandDef = commandDef;
+const savedMode = jobsMockMode;
+
+resetHost();
+jobsMockMode = 'legacy';
+plugin.apply(makeCtx());
+await sleep(200);
+check('on a pre-0.1.7 host it falls back to jobs.onJobDone and says so',
+  typeof jobDoneHandler === 'function' && warnLogs.some((l) => l.includes('pre-0.1.7 API')),
+  warnLogs.filter((l) => l.includes('pre-0.1.7 API')).slice(-1)[0] ?? '(no legacy notice)');
+
+mark = markNow();
+jobDoneHandler({ status: 'completed' });
+await sleep(QUIET);
+check('the legacy callback still plays job-done',
+  chosenSinceMark(mark).includes('job-done'), chosenSinceMark(mark).join(',') || 'none');
+
+mark = markNow();
+jobDoneHandler({ status: 'failed' });
+await sleep(QUIET);
+check('the legacy callback still plays job-failed',
+  chosenSinceMark(mark).includes('job-failed'), chosenSinceMark(mark).join(',') || 'none');
+
+// (h) Neither API. The plugin must lose only the job scenes, and it must say which
+// capability is missing rather than throwing inside an inject callback where the
+// host's own containment would swallow it.
+resetHost();
+jobsMockMode = 'none';
+let noneThrew = false;
+try {
+  plugin.apply(makeCtx());
+} catch {
+  noneThrew = true;
+}
+await sleep(200);
+check('with neither job API it warns once instead of throwing',
+  !noneThrew && warnLogs.some((l) => l.includes('job alerts are disabled')),
+  warnLogs.filter((l) => l.includes('job alerts are disabled')).slice(-1)[0] ?? '(no notice logged)');
+
+mark = markNow();
+emitTurn('completed');
+await sleep(QUIET);
+check('with no job API at all, the other scenes still work',
+  chosenSinceMark(mark).includes('turn-done'), chosenSinceMark(mark).join(',') || 'none');
+
+jobsMockMode = savedMode;
+resetHost();
+commandDef = savedCommandDef;
+
+// (h) Unloading the plugin must release the player. The mock keeps the disposers that
 // `ctx.effect` returns, so this runs the real unload path instead of assuming it. It runs
-// last: it disposes every subscription the run installed.
+// last: it disposes every registration the run installed, including the two probe
+// instances above.
 for (const { dispose } of [...disposers].reverse()) {
   try {
     dispose();

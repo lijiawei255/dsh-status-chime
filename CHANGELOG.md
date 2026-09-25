@@ -4,15 +4,104 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] — 2026-09-25
+
+### Fixed
+
+- **`scripts/verify-local-install.mjs` skipped the two checks it exists for on the install it
+  exists for.** The skip condition asked whether the Clip-sets line contained `(missing)` —
+  the marker the *Scenes* line uses — while that line's own wording is `missing`, so the test
+  could never match. The result was two silent SKIPs on the single-file install, where the
+  isolation the fixture builds actually works; the evidence was sitting in the skipped line's
+  own detail text. The condition now probes `<plugin dir>/../assets/clips`, the directory the
+  plugin itself resolves to, and the skip reason names the path it checked. Measured: the
+  installed copy goes from 8/8 with 2 skipped to **10/10 with none**, while the repository
+  build keeps its two honest SKIPs.
+- **The two background-job scenes were dead on DSH 0.1.7.** 0.1.7 removed
+  `jobs.onJobDone`, which was the only job API 0.3.0 knew, so `job-done` and `job-failed`
+  stopped firing — **and nothing was logged**, because the `TypeError` is raised inside an
+  `ctx.inject` callback and cordis contains a failing plugin per fiber. The plugin now
+  subscribes to 0.1.7's `ctx.jobs.events.subscribe({ owners: 'all' })` commit stream and
+  reads `settled`, preferring it whenever it exists.
+  - Only `settled` counts. `registered`, `progress`, `stopping`, `output` and `removed` are
+    ignored, so nothing speaks while a job is still running.
+  - Two of `settled`'s fields suppress the alert, matching the host's own job reporter:
+    `awaited` (a waiting caller already collected the result) and `cause: 'teardown'` (the
+    owner is being destroyed). Without those, every shutdown would speak and every
+    `job_wait` would double-report.
+  - `jobs.onJobDone` is kept as a fallback branch, taken only when `events.subscribe` is
+    absent, so 0.1.5/0.1.6 hosts keep their job scenes. Which branch is in use is logged at
+    load time; when neither API exists the plugin warns once and keeps its other scenes.
 
 ### Added
 
+- **`scripts/sync-profile.mjs`**, which makes "the local single-file install matches this
+  repository" a checkable claim instead of a promise. `--check` (default) compares size and
+  SHA-256 and prints `PARITY` or `DRIFT`; `--apply` copies and prints the restart reminder.
+  `--all` extends the mirror to the audio: `assets/clips/**` and `assets/play.ps1` into
+  `$DSH_HOME/voice-alerts/`, plus a comparison of the published `assets/clips.json` against
+  the private `$DSH_HOME/voice-alerts/clips.json` that prints **differing field paths and
+  never their values**.
+- **`docs/mirror-policy.md`**, stating the rule the two previous entries exist to enforce:
+  code and audio are mirrored byte for byte, wording is the only sanctioned difference, and
+  the private master is authoritative. It also records the two honest limits — CI cannot run
+  the wording gate because a GitHub runner has no `$DSH_HOME`, and the local rule file needs
+  a positive control so a broken loader is not mistaken for a clean tree.
+- The `clips.json` comparison classifies each differing path and requires the **functional**
+  count to be **0** (model, voice, rate, pitch, volume, format, sampleRate, `loudnorm`, every
+  spoken line). A non-zero count exits 3, and the classification is conservative: an
+  unclassified field counts as functional, so a new key cannot slip through as "wording".
+  Measured on the current pair: 50 paths differ, 0 of them functional — the shipped audio,
+  voice and synthesis settings are identical, which is the machine-checkable form of "the
+  clips were not regenerated for publication".
 - The READMEs now carry an **Awesome DSH Plugin** badge and a "Listed in" / 「收录」
   section, recording that the plugin is listed in
   [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
   under the `notify` category
   ([#5553](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/5553), merged).
+
+### Changed
+
+- **Two passages about the voice were reworded into neutral terms.** They quoted a model's
+  audition review verbatim, and that quote carried descriptive wording this project does not
+  publish. The assessment itself is unchanged — which candidate won, and on what grounds —
+  only the register is. **No audio was regenerated**: the 32 clips in `assets/clips/` are the
+  ones that were auditioned, and `sync-profile.mjs --all` now asserts that the manifest fields
+  determining them are identical to the private master's.
+- A forbidden-word list now lives **outside every clone**, in
+  `$DSH_HOME/voice-alerts.scan.json`, and is applied by `scripts/scan-sensitive.mjs`. The
+  scanner already reported file, line and category without echoing the match, so nothing about
+  the private wording can become a second copy of itself through a CI log or an issue paste.
+- **Verification baseline moved from `@deepseek-ai/dsh` 0.1.5-rc.2 to 0.1.7-rc.2**, the
+  version DSH Desktop ships. CI's `DSH_TEST_VERSION` moved with it — pinned to the exact
+  version on purpose, because npm's `latest` dist-tag is still `0.1.5-rc.3` while 0.1.7-rc.2
+  sits under `next`.
+- The offline suite grew from 63 to **76 checks**: the job stream's filter, its two
+  suppressing fields, the five event types that must stay silent, and a freshly applied
+  plugin instance per API generation (new stream, legacy callback, and neither).
+- The `job-failed` blind spot is documented **against 0.1.7** rather than 0.1.5: a job still
+  has no exit-code field and a non-zero shell exit still settles `completed`. 0.1.7 does add
+  `detail: 'exit code: N'`, which is recorded as an observable but deliberately **not
+  parsed** — it is human-facing text, and treating it as a contract would break silently the
+  next time it is reworded.
+- `TROUBLESHOOTING.md` item 10 now names the three load-time job-API log lines, and the file's
+  opening "where is the log" section was **rewritten rather than re-pathed**. It used to point
+  at `%APPDATA%\...\logs\host\dsh-<date>.log`; the official desktop build writes no such file
+  (measured: `logs/host` appears nowhere in its `app.asar`, the host's stdout is piped to the
+  shell with `child.stdout.pipe(process.stdout)`, and only `logs\crash-*.log` reports are
+  persisted). The section now says where the lines actually are — stdout for a CLI launch,
+  `/voice-alerts status` in the chat UI on every build — and records that earlier or
+  third-party shells did write that file.
+- **`job-done` was re-observed on 0.1.7 by ear**, on the mirrored build: a real background job
+  (started and deliberately never waited on, so `awaited` was false) played the Chinese clip
+  when it settled. `docs/verification.md` §1 records that this one entry is auditory rather than
+  log-backed, and why: there is no host log file to read on the current build.
+- `package.json` `engines.dsh` stays at `>=0.1.5-rc.1` and still describes the real floor
+  (both job APIs are supported). Note that DSH itself does **not** read `engines`: 0.1.7's
+  plugin compatibility gate evaluates `peerDependencies` against the runtime version and
+  grants exemptions through the profile's `compatibility.json`. No `peerDependencies` are
+  declared here on purpose — a peer on `@deepseek-ai/dsh` would let pnpm's
+  `auto-install-peers` pull a second copy of the core into a user's profile.
 
 ## [0.3.0] — 2026-09-21
 

@@ -11,7 +11,7 @@
 #   - the plugin module imports node builtins only, so a clean machine needs nothing
 #   - all 32 packaged clips exist and are non-empty (8 scenes x 2 languages x 2 formats)
 #   - with no ffplay anywhere, the PowerShell backend is still detected and used
-#   - the 63-check logic suite passes
+#   - the 76-check logic suite passes
 #   - no personal path or credential-shaped string is committed
 #
 # DOES NOT PROVE:
@@ -41,7 +41,13 @@ jobs:
     env:
       # Pinned so a failure means "this plugin changed" rather than "the runner moved".
       # Raise deliberately once a newer DSH is known good.
-      DSH_TEST_VERSION: '0.1.5-rc.2'
+      #
+      # 0.1.7-rc.2 is the version the plugin is verified against, and it is the one
+      # DSH Desktop actually ships. Note the npm dist-tags: `latest` is still
+      # 0.1.5-rc.3, and 0.1.7-rc.2 sits under `next`, so this pin must name the exact
+      # version rather than a tag. It matters for more than scenery: 0.1.7 removed
+      # `jobs.onJobDone`, which is the whole reason this pin moved.
+      DSH_TEST_VERSION: '0.1.7-rc.2'
 
     steps:
       - name: Check out

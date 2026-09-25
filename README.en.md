@@ -60,8 +60,12 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 `approval` only fires under the `ask` approval policy; under `never` nothing is waiting for you, so nothing is spoken. It listens on the **`approval/asked` session event**, which is always emitted under `ask`, with the scoped `approval/request` waterfall kept as a fallback. Both paths play the same clip.
 
 Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the
-[v0.3.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/latest) as **16
+[v0.4.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.0) as **16
 audio files** — the bare names are **Chinese** (the default set) and the `.en` names are English.
+The link is pinned to a specific tag rather than `latest`, and **every release re-attaches the
+same 16 files**: the audio has not changed by a single byte since 0.3.0 (0.4.0 changed only
+code), so each release page can be listened to directly instead of depending on an older one
+still carrying the attachments.
 
 ⚠️ Those attachments are **for listening only, not an install artifact**. Install with
 `dsh plugin add`; the package already contains all 32 files (16 clips × mp3 + wav), so
@@ -182,7 +186,7 @@ In the chat box, run:
 /voice-alerts status
 ```
 
-If you see `Voice alerts: on (v0.3.0)`, `Language: zh` and `Scenes (8)`, the install worked. To hear all eight:
+If you see `Voice alerts: on (v0.4.0)`, `Language: zh` and `Scenes (8)`, the install worked. To hear all eight:
 
 ```
 /voice-alerts
@@ -238,7 +242,7 @@ DSH events  ──▶  lib/index.js  ──▶  coalesce / throttle / priority  
 |---|---|
 | `session/event` → `turn/start` / `user/message` / `turn/end` | Whether the turn was human-initiated, and how it ended |
 | `session/event` → `goal/change` | Goal `complete` and `block` |
-| `jobs.onJobDone` | Background job `completed` and `failed` |
+| `jobs.events.subscribe` → `settled` | A background job ending; `completed` speaks, `failed` speaks, `killed` stays silent, as do `awaited` (a waiting caller already collected it) and `cause: 'teardown'` (the owner is going away) |
 | `tools/pre-execute` | A tool name in `waitingTools` means the agent is about to wait for you |
 | `session/event` → `approval/asked` | **Primary path**: always emitted when the approval policy is `ask` |
 | `approval/request` | **Fallback**: the scoped waterfall, also only under `ask`; both play the same clip |
@@ -264,9 +268,9 @@ python tools/qw_local_omni.py preview/flash-mary-en.mp3 preview/flash-eva-en.mp3
   --message "Compare these recordings against each other: rate clarity, naturalness, voice character and cleanliness, and rank them."
 ```
 
-What comes back is a **ranking**, not a pile of isolated scores — "A is closer to the target than B" is far more useful than "A scored 7". In practice the reasoning is specific:
+What comes back is a **ranking**, not a pile of isolated scores — "A is closer to the target than B" is far more useful than "A scored 7". In practice the reasoning is specific (summarised below):
 
-> A4 is the only one that keeps the clarity and steadiness of a system alert while achieving a low, breathy texture. A2 is mature but not distinctive enough, A5 is a little flat, and A1, A3 and A6 are excluded for being too bright or too young-sounding.
+> A4 keeps the clarity and steadiness a system alert needs while sounding closest to the target; A2 is not distinctive enough, A5 is a little flat, and A1, A3 and A6 are excluded for being too bright or too young.
 
 **2. ASR read-back as an objective check**
 
@@ -428,8 +432,13 @@ to check any individual number.
 | | |
 |---|---|
 | Operating system | Windows 11 |
-| DSH | DSH Desktop 2.0.13, `@deepseek-ai/dsh` **0.1.5-rc.2** |
+| DSH | DSH Desktop (official build), `@deepseek-ai/dsh` **0.1.7-rc.2** |
 | Extra software on that machine | ffmpeg, Python 3 and the Alibaba Cloud Bailian CLI are installed |
+
+> The previous release (0.3.0) was verified against **0.1.5-rc.2**. DSH 0.1.7 removed
+> `jobs.onJobDone`, which silently killed both background-job scenes; 0.4.0 is the fix — it
+> subscribes to 0.1.7's `jobs.events.subscribe` and keeps a fallback to the old callback, so
+> 0.1.5 and 0.1.6 still work too.
 
 **What that means:**
 
@@ -438,9 +447,10 @@ to check any individual number.
 - ✅ **"Zero dependency on a clean Windows install"** — the baseline player is Windows
   PowerShell 5.1 plus .NET `System.Media.SoundPlayer`, both **operating-system components**
   of Windows 10/11, and the no-ffmpeg case was verified by simulation.
-- ⚠️ **DSH version** — verified **only on the version above**. A newer or older DSH that
-  changed the event surface could stop some scenes from firing. This is the one genuinely
-  unknown variable, and it is not something a test on this machine can remove.
+- ⚠️ **DSH version** — verified on **0.1.7-rc.2** and on the 0.1.5 line (the latter simulated
+  by the suite's legacy-API phase, not measured on a real host). A later DSH that changes the
+  event surface again could stop some scenes from firing. This is the one genuinely unknown
+  variable, and it is not something a test on this machine can remove.
 - ⚠️ **Installing from GitHub on someone else's completely clean Windows** — **there was no
   second machine available, so this step has not been measured directly.** CI (below) covers
   "install + load + backend detection" on a clean GitHub-hosted Windows runner, but **a
@@ -457,9 +467,9 @@ path, which usually pinpoints the cause immediately.
 | **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
 | **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the automated quality gate (ASR similarity 1.000, clarity and cleanliness 10/10, no clipping). The **Chinese** set was additionally confirmed by ear, clip by clip, to play through completely; **the English set has not had that listening pass** — it passed the automated gate only |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
-| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **63 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, and language switching with its fallback |
+| **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **76 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, language switching with its fallback, and **the probing of both job-event API generations** |
 | **Language** | Chinese is the default; after `lang en` the plugin genuinely resolves the English **file** (the test asserts on the resolved filename, not just the status text); an unrecognised language in the config falls back to Chinese instead of going silent |
-| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 63-check suite, and the privacy scan |
+| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 76-check suite, and the privacy scan |
 
 On the `approval` scene specifically: it can only fire under the `ask` approval policy, and
 although it was heard on a real approval request, **which of the two paths delivered it is
@@ -474,11 +484,70 @@ the fact that **it cannot prove sound reaches a speaker**.
 
 **`job-failed` is effectively unreachable for a background shell command that exits non-zero.**
 
-Measured: a command run in the background that ended with `exit 7` was recorded by DSH as `completed`, so what played was "background job finished". The reason is that a job snapshot **has no exit code field**, and the producer for background shell commands only ever emits `completed` or `killed`. `failed` is reserved for a background **tool** task reporting an error, or for a producer contract violation.
+Measured: a command run in the background that ended with `exit 7` was recorded by DSH as `completed`, so what played was "background job finished". The reason is that a job has only three terminal statuses — `completed`, `killed`, `failed` — and the producer for background shell commands only ever emits the first two. `failed` is reserved for a background **tool** task reporting an error, or for a producer contract violation. **This is framework behaviour, and 0.1.7 did not change it.**
 
-For what it is worth: **DSH's own `desktop-notifications` keys off the same `status === 'failed'`, so it has exactly the same blind spot** — this is framework behaviour, not an implementation error in this plugin.
+0.1.7 did add one observable: a job's detail now carries `exit code: N`, so non-zero exits are at least visible in the log. That string is **deliberately not parsed** here — it is written for a human, and treating it as a contract would break silently the next time it is reworded. The right fix is for DSH to expose the exit code as a status field, not for this plugin to guess at text.
 
 The scene is **kept** (it does work for tool-task failures), but its trigger **has never been reproduced**, only checked at the source level. You can confirm the audio itself is fine with `/voice-alerts test job-failed`.
+
+### What 0.4.0 actually fixes
+
+DSH 0.1.7 deleted `jobs.onJobDone`, and 0.3.0 knew only that API — so on 0.1.7 both the `job-done` and `job-failed` scenes **went silent without a single error line** (the host contains the throw per fiber). 0.4.0 subscribes to 0.1.7's `jobs.events.subscribe({ owners: 'all' })` commit stream instead:
+
+- Only `settled` counts; `registered`, `progress`, `stopping`, `output` and `removed` are ignored.
+- `awaited: true` (a waiting caller already collected the result) and `cause: 'teardown'` (session archived, host exiting) both stay **silent** — otherwise every shutdown would speak, and every `job_wait` would double-report.
+- The old API is kept as a fallback branch, taken only when `events.subscribe` is absent, and the log says which one is in use. Both branches are covered by the suite.
+
+## Local and published: the mirror, and the one sanctioned difference
+
+This project is two things at once: **the repository other people install**, and **the copy
+running on the author's machine**. When those diverge, the trouble is that nothing shows it —
+the version string stays identical while the code moves, so "what I tested locally" and "what
+you downloaded" quietly stop being the same artifact. The mirror is therefore a rule that can
+be executed, not a promise.
+
+**Mirrored byte for byte** (`node scripts/sync-profile.mjs --all --check` / `--apply`):
+
+| Local | Published |
+|---|---|
+| the single-file install's `<profile>/<name>.js` | `lib/index.js` |
+| `$DSH_HOME/voice-alerts/clips/**` | `assets/clips/**` (32 audio files) |
+| `$DSH_HOME/voice-alerts/play.ps1` | `assets/play.ps1` |
+
+That rule is not decoration: it is how a local copy was caught **three commits and one host-API
+migration behind** the repository while both files carried the same version number.
+
+**Wording is the only sanctioned difference.** `$DSH_HOME/voice-alerts/clips.json` is the
+**private master** (written the author's way, not for publication); the published
+`assets/clips.json` describes **the same audio** in neutral terms — **the clips were not
+regenerated**, those 32 files are the ones that were auditioned. Differences are confined to
+comments, the audition candidate list (ids, labels, instructions), the `chosenCandidate` name
+and the style instruction.
+
+**And it is machine-checkable**: `sync-profile.mjs` classifies every differing field path and
+requires the **functional** count to be **0** — model, voice, rate, pitch, volume, format,
+sampleRate, `loudnorm`, and every spoken line in both languages. A non-zero count exits 3,
+because that is not "wording" and no copy can paper over it. The classification is deliberately
+conservative: **an unclassified field counts as functional**, so a new key cannot slip through
+as "probably just wording".
+
+**The forbidden-word list lives only locally**, in `$DSH_HOME/voice-alerts.scan.json` (outside
+every clone), enforced by `node scripts/scan-sensitive.mjs .`. The scanner reports **file, line
+and category only and never echoes what it matched**, so its output is safe to paste into an
+issue, a CI log or a chat — the check cannot become a second copy of the thing it checks.
+
+Two limits, stated rather than papered over:
+
+- **CI cannot run this wording gate** — a GitHub runner has no `$DSH_HOME`, so CI applies the
+  built-in rules only (credentials, key shapes, personal paths). The wording rules protect the
+  author's machine at commit time.
+- **Positive control**: scanning the private directory
+  (`node scripts/scan-sensitive.mjs "$DSH_HOME/voice-alerts"`) **must** report hits. If it comes
+  back clean, the local rules stopped loading and the gate is silently open.
+
+The full rule, the per-field difference table, and what is *not* a wording difference
+(`maturity` is a scoring dimension in `qa.mjs` and stays) are in
+[`docs/mirror-policy.md`](docs/mirror-policy.md).
 
 ## Repository layout
 
@@ -496,12 +565,14 @@ dsh-status-chime/
 ├── scripts/                      # build / qa / selftest / negative control / privacy scan
 │   ├── build.mjs                 # synthesise clips (takes --lang)
 │   ├── qa.mjs                    # quality gate (takes --lang)
-│   ├── selftest.mjs              # offline logic suite, 63 checks
+│   ├── selftest.mjs              # offline logic suite, 76 checks
 │   ├── qa-negative-control.mjs   # proves the gate actually rejects bad audio
 │   ├── verify-local-install.mjs  # verifies an installed single-file copy
+│   ├── sync-profile.mjs          # keeps a single-file install identical to this repo (--check / --apply)
 │   ├── scan-sensitive.mjs        # privacy / wording scan
 │   └── scan-sensitive.verify.mjs # proves the scanner actually catches things
 ├── docs/verification.md          # the per-item verification record
+├── docs/mirror-policy.md         # mirror rule: what is byte-identical, what may differ in wording
 ├── .github/workflows/verify.yml  # CI: install + suite + scan on a clean Windows runner
 ├── INSTALL.md                    # install steps written for an agent
 ├── TROUBLESHOOTING.md            # what to do when there is no sound
