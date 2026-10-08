@@ -42,12 +42,13 @@ jobs:
       # Pinned so a failure means "this plugin changed" rather than "the runner moved".
       # Raise deliberately once a newer DSH is known good.
       #
-      # 0.1.7-rc.2 is the version the plugin is verified against, and it is the one
-      # DSH Desktop actually ships. Note the npm dist-tags: `latest` is still
-      # 0.1.5-rc.3, and 0.1.7-rc.2 sits under `next`, so this pin must name the exact
-      # version rather than a tag. It matters for more than scenery: 0.1.7 removed
-      # `jobs.onJobDone`, which is the whole reason this pin moved.
-      DSH_TEST_VERSION: '0.1.7-rc.2'
+      # 0.2.0-rc.2 is the version the plugin is verified against, and it is the one
+      # DSH Desktop actually ships (as of 2026-10-09). It is also the npm `latest`
+      # dist-tag, so this pin and the tag now agree — they did not before: at the
+      # 0.4.0 release `latest` was still 0.1.5-rc.3 while 0.1.7-rc.2 sat under
+      # `next`, which is why the pin names an exact version rather than a tag.
+      # Raise it deliberately: `0.2.1-alpha.1` exists and is untested.
+      DSH_TEST_VERSION: '0.2.0-rc.2'
 
     steps:
       - name: Check out

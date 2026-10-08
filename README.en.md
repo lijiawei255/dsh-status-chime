@@ -5,8 +5,11 @@
 > Spoken status alerts for DeepSeek Harness: when a turn finishes, fails, a background job ends, or the agent starts waiting for you, say it out loud instead of only flashing a taskbar icon.
 
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)
+![DSH](https://img.shields.io/badge/DSH-0.1.5%20%E2%80%93%200.2.0--rc.2-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 [![Awesome DSH Plugin](https://img.shields.io/badge/Awesome%20DSH%20Plugin-listed-brightgreen)](https://awesome-dsh-plugin.com/notify/)
+
+> **Compatibility status (2026-10-09, v0.4.1):** audited interface by interface and re-triggered on **DSH Desktop (official build) 0.2.0-rc.2**, the current release — all eight scenes pass, and **six of them were observed actually playing the clip** (including `job-failed`, never triggered before). Every `@deepseek-ai/dsh` from **0.1.5** onwards is supported (the 0.1.7 event change is handled; 0.1.6 and earlier take the fallback branch). Per-item evidence: [docs/verification.md §0](docs/verification.md).
 
 ---
 
@@ -60,7 +63,7 @@ Two **filtering rules** deserve a note, because they are what keeps this plugin 
 `approval` only fires under the `ask` approval policy; under `never` nothing is waiting for you, so nothing is spoken. It listens on the **`approval/asked` session event**, which is always emitted under `ask`, with the scoped `approval/request` waterfall kept as a fallback. Both paths play the same clip.
 
 Audio samples: GitHub's Markdown cannot embed a player, so the clips are attached to the
-[v0.4.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.0) as **16
+[v0.4.1 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.1) as **16
 audio files** — the bare names are **Chinese** (the default set) and the `.en` names are English.
 The link is pinned to a specific tag rather than `latest`, and **every release re-attaches the
 same 16 files**: the audio has not changed by a single byte since 0.3.0 (0.4.0 changed only
@@ -120,7 +123,8 @@ Clip sets: zh (active): all clips present  |  en: all clips present
 
 1. **Platform: Windows 10/11.** The guaranteed player is Windows' own PowerShell + `System.Media.SoundPlayer`; there is **no macOS or Linux support**. With ffmpeg installed it prefers `ffplay`, but that is an optional upgrade.
 2. **You need DSH Desktop** and a terminal that can run `dsh`. Installing a plugin goes through `dsh plugin`, which shells out to **pnpm** (see the trap below).
-3. **The audio needs nothing installed** — all 32 clips, both languages, ship in the package.
+3. **DSH version: anything from `@deepseek-ai/dsh` 0.1.5 up works**, and the current release, **0.2.0-rc.2**, has been re-tested (see the compatibility note at the top). The plugin probes which generation of job events your host exposes, so there is no version-specific package to pick.
+4. **The audio needs nothing installed** — all 32 clips, both languages, ship in the package.
 
 ### ⚠️ Read once: the package name and the runtime name differ
 
@@ -186,7 +190,7 @@ In the chat box, run:
 /voice-alerts status
 ```
 
-If you see `Voice alerts: on (v0.4.0)`, `Language: zh` and `Scenes (8)`, the install worked. To hear all eight:
+If you see `Voice alerts: on (v0.4.1)`, `Language: zh` and `Scenes (8)`, the install worked. To hear all eight:
 
 ```
 /voice-alerts
@@ -389,7 +393,18 @@ Work through this order; it covers the overwhelming majority of cases. The full 
 6. The log says `no <lang> audio for <scene>` (e.g. `no zh audio for turn-done`) → that language's clip file is missing.
 7. The log says `throttled <scene>` → the repeat-suppression window caught it. That is expected behaviour.
 
-Log location: `%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log`; search for `voice-alerts`.
+**Where the log is: the official desktop build writes no host log file.** Measured on
+0.2.0-rc.2: the string `logs/host` does not exist anywhere in its `app.asar`, the `logs/`
+directory under the official userData is empty, and the only thing persisted is crash reports
+at `%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*.log`. Two ways to see a `[voice-alerts]`
+line instead:
+
+- run a CLI host **in a terminal**, where the log goes straight to stdout;
+- or type **`/voice-alerts status`** in the chat box — it prints the detected player, the
+  config path and the clip inventory, works on every build, and is the first thing to look at.
+
+(`%APPDATA%\DSH Desktop\logs\host\…` was the **discontinued third-party shell**; 0.4.1 stopped
+referring to it.)
 
 ⚠️ **One thing to know up front**: **the absence of `ffplay` in the log is not a fault.** ffplay ships with ffmpeg, which is a separate install; it only makes startup faster and gives you a separate volume. Without it the plugin uses the PowerShell player that ships with Windows, and everything still works.
 
@@ -432,9 +447,17 @@ to check any individual number.
 | | |
 |---|---|
 | Operating system | Windows 11 |
-| DSH | DSH Desktop (official build), `@deepseek-ai/dsh` **0.1.7-rc.2** |
+| DSH | DSH Desktop (official build), `@deepseek-ai/dsh` **0.2.0-rc.2** |
 | Extra software on that machine | ffmpeg, Python 3 and the Alibaba Cloud Bailian CLI are installed |
 
+> **The 0.4.1 re-check (2026-10-09).** This row used to read **0.1.7-rc.2**, and 0.2.0-rc.2 —
+> the current release, published 2026-09-29 — landed *after* the last commit here, so the whole
+> record had been written against a host two generations old. 0.4.1 did two things: it looked up
+> every host interface the plugin uses by name in the shipped 0.2.0-rc.2 `app.asar` (**none was
+> removed or renamed**), and it re-triggered all eight scenes on a real 0.2.0-rc.2 host —
+> **six of them by the clip they actually played**, `job-failed` included, which had **never**
+> been triggered before. Per-item evidence: [docs/verification.md §0](docs/verification.md).
+>
 > The previous release (0.3.0) was verified against **0.1.5-rc.2**. DSH 0.1.7 removed
 > `jobs.onJobDone`, which silently killed both background-job scenes; 0.4.0 is the fix — it
 > subscribes to 0.1.7's `jobs.events.subscribe` and keeps a fallback to the old callback, so
@@ -447,10 +470,11 @@ to check any individual number.
 - ✅ **"Zero dependency on a clean Windows install"** — the baseline player is Windows
   PowerShell 5.1 plus .NET `System.Media.SoundPlayer`, both **operating-system components**
   of Windows 10/11, and the no-ffmpeg case was verified by simulation.
-- ⚠️ **DSH version** — verified on **0.1.7-rc.2** and on the 0.1.5 line (the latter simulated
-  by the suite's legacy-API phase, not measured on a real host). A later DSH that changes the
-  event surface again could stop some scenes from firing. This is the one genuinely unknown
-  variable, and it is not something a test on this machine can remove.
+- ✅ **DSH 0.2.0-rc.2, the current release** — interface-by-interface audit plus all eight
+  scenes re-triggered (above).
+- ⚠️ **Anything newer than 0.2.0-rc.2** — `0.2.1-alpha.1` exists and has not been tested. A DSH
+  that changes the event surface can still silence scenes (0.1.7 did exactly that), so this
+  remains the unknown; what changed is that its boundary moved from 0.1.7-rc.2 to 0.2.0-rc.2.
 - ⚠️ **Installing from GitHub on someone else's completely clean Windows** — **there was no
   second machine available, so this step has not been measured directly.** CI (below) covers
   "install + load + backend detection" on a clean GitHub-hosted Windows runner, but **a
@@ -464,18 +488,26 @@ path, which usually pinpoints the cause immediately.
 
 | Layer | Status |
 |---|---|
-| **Events** | 7 of the 8 scenes have been verified by a real trigger: `turn-done`, `turn-error`, `needs-input`, `job-done`, `goal-complete`, `goal-blocked`, `approval` |
+| **Events** | **All 8 scenes re-triggered on 0.2.0-rc.2**: 6 were observed playing the clip they resolved (`needs-input`, `approval`, `goal-complete`, `goal-blocked`, `job-done`, `job-failed`); `turn-done` and `turn-error` were observed reaching the right scene, resolving the right clip and spawning the player, but **a one-shot host disposes the plugin tree at turn end**, so the player is cut off (a desktop host stays up and has no such limit) |
 | **Audio** | All 16 clips (8 scenes in each of 2 languages) passed the automated quality gate (ASR similarity 1.000, clarity and cleanliness 10/10, no clipping). The **Chinese** set was additionally confirmed by ear, clip by clip, to play through completely; **the English set has not had that listening pass** — it passed the automated gate only |
 | **Backend** | Forcing PowerShell selects `.wav` correctly; with no ffmpeg present it falls back and still plays; an explicitly requested but absent ffplay fails loudly instead of switching backends behind your back |
+| **Interface** | Every service, event and field name the plugin uses was found in the shipped 0.2.0-rc.2 `app.asar` (8097 JS files); **nothing was removed or renamed**. The only absent hook is `jobs.onJobDone`, already removed in 0.1.7 — the fallback branch is simply never taken, as designed |
 | **Code** | `scripts/selftest.mjs` drives the plugin through a mock context with **76 checks** covering event mapping, filter rules, priority, throttling, the command, name collisions, asset resolution order, language switching with its fallback, and **the probing of both job-event API generations** |
 | **Language** | Chinese is the default; after `lang en` the plugin genuinely resolves the English **file** (the test asserts on the resolved filename, not just the status text); an unrecognised language in the config falls back to Chinese instead of going silent |
-| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 76-check suite, and the privacy scan |
+| **CI** | `.github/workflows/verify.yml` verifies on a clean `windows-latest`: a real install that registers as a profile layer, BOM-free manifests, node-builtins-only imports, all 32 clips present, **the PowerShell backend still detected with no ffplay**, the 76-check suite, and the privacy scan. **As of 0.4.1 it pins 0.2.0-rc.2** |
 
 On the `approval` scene specifically: it can only fire under the `ask` approval policy, and
 although it was heard on a real approval request, **which of the two paths delivered it is
 unresolved** — the `approval/asked` session event and the `approval/request` waterfall play
 the same clip, so hearing it does not distinguish them. The behavior of the session-event
 path (including subagent filtering) is covered by the offline suite.
+
+> Added in 0.4.1: `approval` *was* really triggered on 0.2.0-rc.2 — the host classified a write
+> outside the workspace as needing approval and the plugin played `approval.wav` immediately.
+> **The two paths are still indistinguishable** (same clip either way), but "it does fire under
+> the `ask` policy on 0.2.0-rc.2" is now measured rather than inferred. Note also that this
+> machine currently runs the `never` policy — **silence there is by design**: nothing is waiting
+> for you, so nothing should speak.
 
 What CI does and does not prove is written out at the top of the workflow file — including
 the fact that **it cannot prove sound reaches a speaker**.
@@ -488,7 +520,7 @@ Measured: a command run in the background that ended with `exit 7` was recorded 
 
 0.1.7 did add one observable: a job's detail now carries `exit code: N`, so non-zero exits are at least visible in the log. That string is **deliberately not parsed** here — it is written for a human, and treating it as a contract would break silently the next time it is reworded. The right fix is for DSH to expose the exit code as a status field, not for this plugin to guess at text.
 
-The scene is **kept** (it does work for tool-task failures), but its trigger **has never been reproduced**, only checked at the source level. You can confirm the audio itself is fine with `/voice-alerts test job-failed`.
+The scene is **kept** (it does work for tool-task failures), and **0.4.1 update: its trigger has now actually been observed.** The path this section predicted is the path that fired — a background **tool** task failing: a background `pwsh` job could not start because the sandbox failed to apply the workspace write ACL, the producer recorded terminal status `failed`, and the plugin played `job-failed.wav` (reproduced twice). Switch the sandbox to `danger-full-access` and the same job completes, playing `job-done.wav` instead — exactly the discrimination the scene exists for. The current wording is therefore: **"a background shell command that exits non-zero" is still unreachable (framework behaviour), but "a background tool task that fails" is now measured.**
 
 ### What 0.4.0 actually fixes
 
@@ -497,6 +529,16 @@ DSH 0.1.7 deleted `jobs.onJobDone`, and 0.3.0 knew only that API — so on 0.1.7
 - Only `settled` counts; `registered`, `progress`, `stopping`, `output` and `removed` are ignored.
 - `awaited: true` (a waiting caller already collected the result) and `cause: 'teardown'` (session archived, host exiting) both stay **silent** — otherwise every shutdown would speak, and every `job_wait` would double-report.
 - The old API is kept as a fallback branch, taken only when `events.subscribe` is absent, and the log says which one is in use. Both branches are covered by the suite.
+
+### What 0.4.1 does
+
+**No plugin code changed** — 0.2.0-rc.2 broke no interface, so this release is the re-check and the labelling:
+
+- Every host interface re-audited against the shipped 0.2.0-rc.2 build ([docs/verification.md §0a](docs/verification.md)), and all eight scenes re-triggered on a real 0.2.0-rc.2 host ( §0b/§0c).
+- The compatibility status, a **DSH version badge** and a version line in the install section — previously the only version statement lived in the verification table in the middle of this file, and it named 0.1.7.
+- CI's pinned `DSH_TEST_VERSION` moved from `0.1.7-rc.2` to `0.2.0-rc.2`, and its now-wrong comment (it still claimed npm's `latest` was `0.1.5-rc.3`) was fixed.
+- The **stale third-party log path** in both READMEs (see the troubleshooting section above).
+- The GitHub repository description gained the version information.
 
 ## Local and published: the mirror, and the one sanctioned difference
 

@@ -4,11 +4,116 @@ This file separates what has been **measured** from what has only been **read**.
 because "the feature is implemented" and "the feature was observed working" are different
 claims, and the difference matters when you are deciding whether to rely on something.
 
-Environment: DSH Desktop (official build), `@deepseek-ai/dsh` 0.1.7-rc.2, Windows 11.
+Environment: DSH Desktop (official build), `@deepseek-ai/dsh` **0.2.0-rc.2**, Windows 11.
+The event layer below was re-observed against that version in §0; the sections after it were
+first written against 0.1.5-rc.2 and 0.1.7-rc.2 and say so where it matters.
 
 This record was first written against 0.1.5-rc.2. Where a finding changed with the host
 version it says so in place, rather than being quietly restated — the 0.1.7 job-event
-migration in §4 is the one entry that did.
+migration in §4, and the 0.2.0-rc.2 re-observation in §0, are the entries that did.
+
+---
+
+## 0. Re-observation on 0.2.0-rc.2 (the 0.4.1 pass)
+
+DSH 0.2.0-rc.2 was published 2026-09-29 and is what DSH Desktop ships now. 0.1.7-rc.2, the
+baseline this record carried before, was published 2026-09-24 — everything in the sections
+below was therefore written against a **two-generation-old host**, and the plugin had had no
+commit since. This section is the re-check.
+
+### 0a. Interface audit against the shipped runtime
+
+The plugin talks to the host only through public services and events. Each one was looked up
+by name in the shipped `app.asar` of the installed 0.2.0-rc.2 desktop build (8097 JS files),
+not in a changelog:
+
+| Hook the plugin uses | In 0.2.0-rc.2 | Evidence |
+|---|---|---|
+| `session/event` (root and injected) | ✅ present | dispatched by `dsh-session`; core plugins listen the same way |
+| `turn/start`, `turn/end` and `event.data.turn` | ✅ unchanged | `SessionEventMap` in `dsh-user-questions`/`dsh-tool-cordis` |
+| `turn/end` reason kinds `completed`, `error`, `max-tokens` | ✅ unchanged | `TurnEndReasonMap` gains only `forked` |
+| `user/message` → `data.source.kind === 'user'` | ✅ unchanged | used identically by `dsh-tool-goal` |
+| `session/disposed` | ✅ present | `dsh-session` |
+| `goal/change` with `operation` `complete` / `block` | ✅ unchanged | `dsh-session` known-event-types; 0.2.0 adds `clear`, which stays silent |
+| `approval/asked` | ✅ present | `dsh-user-approval` appends it; in `SessionEventMap` |
+| `approval/request` (waterfall fallback) | ✅ present | `dsh-user-approval` |
+| `tools/pre-execute` (waterfall observer) | ✅ present | `dsh-tools` |
+| `ctx.jobs.events.subscribe({ owners: 'all' })` → `settled` | ✅ unchanged | `dsh-jobs-local` emits `{ type: 'settled', job, cause, awaited }` |
+| `commands.register` with `input: { hint }` | ✅ unchanged | `dsh-commands` |
+| the `sessions`, `jobs`, `commands` services | ✅ all present | resolved by injection in the run below |
+| `jobs.onJobDone` (the pre-0.1.7 fallback) | ❌ gone | 0 hits anywhere in the asar — the fallback branch is simply never taken, as designed |
+
+**No interface the plugin depends on was removed or renamed.** The peer-dependency
+compatibility gate (`dsh-app-boot`, exemptions via the profile's `compatibility.json`) still
+exists, and this package declares no `peerDependencies`, so it is not gated.
+
+### 0b. How the live re-observation was done
+
+The desktop shell writes no host log (§4), so a log-line check is impossible on it. The
+official runtime's bundled CLI was used instead — same `app.asar`, same packages, and it
+prints to a terminal:
+
+```
+"<install>/resources/runtime/cli/bin/dsh.cmd" --version      → 0.2.0-rc.2
+dsh headless --patch <overlay.yml> "<task>"                  → one turn, then exit
+```
+
+- The plugin was mounted **exactly as the desktop profile mounts it** — the single-file
+  artifact `profiles/desktop/dsh-voice-alerts.js`, which at test time was the 0.4.0 build: byte
+  identical to the then-current `lib/index.js`, 44782 B, sha256 `00c6599dc8a5…`, confirmed by
+  `sync-profile.mjs --check` → `PARITY`. The only difference between that artifact and the
+  0.4.1 release is the `VERSION` constant inside it (0.4.0 → 0.4.1) — 0.4.1 changed no
+  behaviour, which is the whole point of the release, so the run below tests the shipped code
+  path rather than a variant of it.
+- The host ran against a **throwaway `DSH_HOME`** so nothing here could touch the real
+  installation, with the plugin's own config pointing its `player` at a stub `play.ps1` that
+  **records the clip file it was handed and exits 0** instead of making noise. The recorded
+  name is the scene, because the plugin resolves exactly one clip per scene. Config-driven,
+  no code change: the artifact under test is the shipped one.
+- A second, throwaway observer plugin wrote the host events it received to a file, which is
+  how "the host still delivers this event" was separated from "the plugin acts on it".
+
+### 0c. What fired
+
+| Scene | Result on 0.2.0-rc.2 | Trigger used |
+|---|---|---|
+| `needs-input` | ✅ played `needs-input.wav` | the model's real `exit_plan_mode` call → `tools/pre-execute` |
+| `approval` | ✅ played `approval.wav` | a real approval request under the `ask` policy |
+| `goal-complete` | ✅ played `goal-complete.wav` | real `create_goal` + `update_goal complete` → `goal/change` |
+| `goal-blocked` | ✅ played `goal-blocked.wav` | real `create_goal` + `update_goal blocked` → `goal/change` |
+| `job-done` | ✅ played `job-done.wav` | a background shell job settling `completed` on the commit stream |
+| `job-failed` | ✅ **played `job-failed.wav`** | a background shell job that settled `failed` — **the first time this scene has ever been observed**, see §4 |
+| `turn-done` | ⚠️ decision observed, playback not captured | a normal human turn ending `completed` |
+| `turn-error` | ⚠️ decision observed, playback not captured | a turn ending `error` (unreachable provider) |
+
+The two ⚠️ rows are a **property of the one-shot host, not of the plugin**, and here is the
+measurement rather than a guess: `dsh headless` tears the plugin tree down the instant the
+turn ends, and the plugin's own unload disposer stops the player. Instrumented trace:
+
+```
+turn/end → decided turn-done → flush pending=turn-done → spawnPlayer kind=powershell
+         → clip resolved turn-done.wav → spawned pid=…
+         → stopPlayback called, activeScene=turn-done    (+21 ms)
+         → child exit code=null signal=SIGTERM            (+25 ms)
+```
+
+So on `turn-done`/`turn-error` the decision, the resolved clip and the spawned player were all
+observed; the clip itself is killed before PowerShell has finished starting, because the host
+is exiting. A desktop host stays up across turns, which is why these two scenes are the two
+the user hears every day. The trace above was taken on a diagnostic copy of the file (traces
+appended, nothing else changed) — that is the one place in this section where the observation
+came from instrumented code rather than the shipped bytes, and it is labelled as such.
+
+The six ✅ rows came from the **unmodified** artifact: the stub recorded the clip name, and no
+trace build was involved.
+
+### 0d. Still not re-verified here
+
+- **The `onJobDone` fallback branch** — no 0.1.5/0.1.6 host exists to run it on; it stays
+  covered by the offline suite (§7).
+- **That the audio reaches a speaker on 0.2.0-rc.2.** The stub records the clip the plugin
+  chose; the desktop-side playback path (§3) is unchanged between versions and is covered by
+  the offline suite and the installed-copy checks, but this pass did not put sound in the air.
 
 ---
 
@@ -21,11 +126,11 @@ Each scene was checked against the DSH source first, then triggered for real whe
 | `turn-done` | `session/event` → `turn/end`, reason `completed`, human-initiated | ✅ observed repeatedly |
 | `turn-error` | `turn/end`, reason `error` or `max-tokens` | ✅ observed |
 | `needs-input` | `tools/pre-execute` with a tool name in `waitingTools` | ✅ observed repeatedly |
-| `job-done` | `jobs.events.subscribe` → `settled`, status `completed` | ✅ **re-observed on 0.1.7 after the migration**, by ear — see below |
+| `job-done` | `jobs.events.subscribe` → `settled`, status `completed` | ✅ **re-observed on 0.2.0-rc.2 (§0c)**, and on 0.1.7 after the migration — see below |
 | `goal-complete` | `session/event` → `goal/change`, operation `complete` | ✅ observed |
 | `goal-blocked` | `goal/change`, operation `block` | ✅ observed |
 | `approval` | `session/event` → `approval/asked` (also the `approval/request` waterfall) | ✅ observed — heard on a real approval request, but **which of the two paths delivered it is unresolved**; they play the same clip. See §2b |
-| `job-failed` | `jobs.events.subscribe` → `settled`, status `failed` | ⚠️ **never observed** — see §4 |
+| `job-failed` | `jobs.events.subscribe` → `settled`, status `failed` | ✅ **observed on 0.2.0-rc.2 (§0c)** — previously "never observed"; see §4 |
 
 "Observed" means the host log contains a `playing <scene>` line **without** the `manual`
 suffix that `/voice-alerts test` adds. That distinction is what separates a real event from
@@ -218,16 +323,30 @@ against 0.1.7-rc.2** because the access path to this data changed:
 - `failed` is assigned when a background **tool** task reports an error, for a producer
   contract violation, or when a teardown cancel force-fails the record.
 
-So the scene is correct and does cover tool-task failures, but its trigger has never been
-observed here. It is documented as unverified rather than quietly described as working.
+So the scene is correct and does cover tool-task failures, and the failure mode above is a
+property of the shell-job producer rather than of this plugin.
 
-**What 0.1.7 changed.** `jobs.onJobDone` was removed. The registry now announces every commit
-on `ctx.jobs.events.subscribe({ owners }, listener)` as
+**Update, 0.2.0-rc.2 (§0c): the trigger has now been observed.** The path that finally fired
+it is the one this section predicted — a background job whose **tool task** failed. In the
+0.2.0-rc.2 run, the background `pwsh` job could not start because the sandbox refused to apply
+its workspace write ACL; the producer recorded that as a job in terminal status `failed`, the
+`settled` frame reached the plugin, and `job-failed.wav` played. Reproduced twice, then
+**not** reproduced once the sandbox was switched to `danger-full-access` — the same job then
+completed and played `job-done.wav`, which is exactly the discrimination this scene exists
+for. What is still true is the older half: a shell command that *runs* and exits non-zero
+still settles `completed`, so it speaks `job-done`.
+
+**What 0.1.7 changed, and what 0.2.0-rc.2 confirms.** `jobs.onJobDone` was removed. The
+registry now announces every commit on
+`ctx.jobs.events.subscribe({ owners }, listener)` as
 `registered | progress | stopping | output | settled | removed`, and `settled` carries
-`{ job, cause: 'producer' | 'kill' | 'teardown', awaited }`. 0.3.0 knew only the removed API,
-so on 0.1.7 **both job scenes were dead and nothing was logged** — the `TypeError` is thrown
-inside an `ctx.inject` callback, and cordis contains a failing plugin per fiber. That silence
-is the reason this section exists in the record rather than only in the changelog.
+`{ job, cause: 'producer' | 'kill' | 'teardown', awaited }`. Re-read against the shipped
+0.2.0-rc.2 build, `dsh-jobs-local` still emits exactly
+`{ type: 'settled', job, cause, awaited }` — same names, same suppression fields. 0.3.0 knew
+only the removed API, so on 0.1.7 **both job scenes were dead and nothing was logged** — the
+`TypeError` is thrown inside an `ctx.inject` callback, and cordis contains a failing plugin
+per fiber. That silence is the reason this section exists in the record rather than only in
+the changelog.
 
 0.4.0 subscribes to the stream and prefers it when present, keeping `onJobDone` as a fallback
 for 0.1.5/0.1.6 hosts. Two of `settled`'s fields suppress the alert, matching what the host's
@@ -247,6 +366,12 @@ with `child.stdout.pipe(process.stdout)`, and only crash reports are persisted �
 `%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*.log`. So `[voice-alerts] …` lines are visible
 when the CLI runs in a terminal, and in the chat UI through `/voice-alerts status`, but not as
 a file in the desktop app. TROUBLESHOOTING.md said otherwise and now says this.
+
+Re-measured on the 0.2.0-rc.2 build during the §0 pass, because it decides how that pass had
+to be run: `logs/host` is **still** absent from the asar (`0` hits across 8097 files), the
+`logs` directory under the official userData is **empty**, and there is no `%APPDATA%\DSH
+Desktop` directory at all — that path belonged to the discontinued third-party shell, and two
+READMEs still carried it until 0.4.1.
 
 **The one observable 0.1.7 adds** is `detail: 'exit code: N'` on shell jobs, so a non-zero
 exit is now visible in the log even though the status is `completed`. It is deliberately not
@@ -313,10 +438,13 @@ not hot-loaded. It reads nothing else — not the profile's `package.json`, not 
 copy is installed but inactive), and never `$DSH_HOME/voice-alerts/**`.
 
 **Measured:** `--check` reported `DRIFT` for the drifted copy that prompted this tool
-(44782 B / sha256 `00c6599dc8a5…` in the repository against 37393 B / sha256 `1348605136df…`
-installed), and `PARITY` after the sync. `--all` additionally reports `ASSETS PARITY` for the
-33 audio files and `clips.json WORDING 50 wording path(s) differ (expected), 0 functional
-path(s) differ` — the machine-checkable form of "the clips were not regenerated".
+(44782 B / sha256 `00c6599dc8a5…` in the repository — that was the **0.4.0** file, before the
+0.4.1 version bump — against 37393 B / sha256 `1348605136df…` installed), and `PARITY` after
+the sync. `--all` additionally reports `ASSETS PARITY` for the 33 audio files and
+`clips.json WORDING 50 wording path(s) differ (expected), 0 functional path(s) differ` — the
+machine-checkable form of "the clips were not regenerated". The same check was run again for
+0.4.1 (repository hash `ec4fb460a87c…`): `DRIFT` before `--apply`, `PARITY` after, and
+`verify-local-install.mjs` 10/10 against the newly mirrored file.
 
 The functional half is `scripts/verify-local-install.mjs --plugin <installed file>`, which
 drives the installed copy through its public command interface: **10/10 checks pass, none
@@ -336,10 +464,12 @@ install gets the full ten.
 |---|---|
 | The audio clips are correct and audible | **Verified** — all 16 through measurement; the eight **Chinese** clips additionally by listening. The English set has not had the listening pass (see §2) |
 | The plugin plays on a clean Windows install with no third-party dependency | **Verified** |
-| Seven of eight scenes fire on real events | **Verified** — including `job-done` **re-verified on 0.1.7 after the migration**, by ear (see §1) |
-| Both job-event API generations work | **The 0.1.7 stream: verified on a real host. The `onJobDone` fallback: mock only** — no 0.1.5/0.1.6 host was available to measure it on |
+| Six of eight scenes fire on real events on **0.2.0-rc.2** | **Verified** — `needs-input`, `approval`, `goal-complete`, `goal-blocked`, `job-done`, `job-failed`, each by the clip it actually resolved (§0c) |
+| The other two scenes decide correctly on 0.2.0-rc.2 | **Decision verified, playback not capturable on a one-shot host** — `turn-done` and `turn-error` reached the correct scene, resolved the correct clip and spawned the player; the clip is killed 21 ms later because `dsh headless` disposes the tree at turn end (§0c) |
+| The plugin's host interface still exists on 0.2.0-rc.2 | **Verified** — every service, event and field name it uses was found in the shipped `app.asar`; nothing was renamed or removed (§0a) |
+| Both job-event API generations work | **The 0.1.7+ stream: verified on a real 0.2.0-rc.2 host. The `onJobDone` fallback: mock only** — no 0.1.5/0.1.6 host was available to measure it on |
 | A local single-file install matches this repository | **Verified** — `sync-profile.mjs --check` prints `PARITY` for the plugin file and `PARITY` for the 33 audio assets, and `verify-local-install.mjs` passes 10/10 against the installed file |
 | `approval` fired on a real approval request | **Heard it, but the exact path is unresolved** — the `approval/asked` session event and the `approval/request` waterfall play the same clip, so hearing it does not tell the two apart |
-| `job-failed` fires on background tool-task failures | **Read from source, never observed** |
+| `job-failed` fires on background tool-task failures | **Verified on 0.2.0-rc.2** — a background job whose tool task failed settled `failed` and played the clip; the same job under `danger-full-access` completed and played `job-done` instead (§4) |
 | Alert repetition cannot happen on session resume | **Read from source** |
 | macOS / Linux playback | **Not implemented** |

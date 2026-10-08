@@ -4,6 +4,76 @@ All notable changes to this project are documented here.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/), and this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — 2026-10-09
+
+**No plugin code changed.** 0.2.0-rc.2 broke nothing, so this release exists to *check that
+claim* and then to put the answer where a visitor can see it. The problem it fixes is a
+documentation one: 0.4.0 was verified against 0.1.7-rc.2, 0.2.0-rc.2 was published five days
+later and became what DSH Desktop ships, and the repository had not been touched since — so
+every page in it named a host two generations old. A reader could not tell whether the plugin
+worked on the version they had just installed.
+
+### Verified
+
+- **Interface audit against the shipped 0.2.0-rc.2 build.** Every service, event and field name
+  the plugin depends on was looked up by name in the installed `app.asar` (8097 JS files), not
+  in a changelog. **Nothing was removed or renamed.** `session/event`, `turn/start`,
+  `turn/end` (reason kinds unchanged), `user/message` `source.kind`, `session/disposed`,
+  `goal/change`, `approval/asked`, `approval/request`, `tools/pre-execute`,
+  `ctx.jobs.events.subscribe({ owners: 'all' })` → `settled { job, cause, awaited }`,
+  `commands.register` with `input.hint`, and the `sessions`/`jobs`/`commands` services all
+  still exist. The only absent hook is `jobs.onJobDone`, removed in 0.1.7 — the fallback branch
+  is simply never taken, as designed.
+- **All eight scenes re-triggered on a real 0.2.0-rc.2 host**, using the official runtime's own
+  bundled CLI (`dsh headless`, `--version` → `0.2.0-rc.2`) against a throwaway `DSH_HOME`, with
+  the plugin mounted exactly as the desktop profile mounts it and its `player` pointed at a stub
+  `play.ps1` that records the clip it was handed instead of making noise.
+  **Six scenes were observed playing the clip they resolved**: `needs-input`, `approval`,
+  `goal-complete`, `goal-blocked`, `job-done`, `job-failed`. `turn-done` and `turn-error`
+  reached the correct scene, resolved the correct clip and spawned the player, but a one-shot
+  host disposes the plugin tree the moment the turn ends, which stops the player 21 ms later —
+  a property of `dsh headless`, not of the long-lived desktop host. Full evidence:
+  `docs/verification.md` §0.
+
+### Added
+
+- **The `job-failed` scene was triggered for real, for the first time.** Until now this record
+  said "read from source, never observed". It fired on the path the old note predicted: a
+  background **tool** task that failed — a background `pwsh` job whose tool task could not
+  start (the sandbox could not apply its workspace write ACL), recorded by the producer with
+  terminal status `failed`. Reproduced twice. The same job under `danger-full-access` completed
+  and spoke `job-done` instead, which is the discrimination the scene exists for. The older
+  half is unchanged and still documented: a background **shell** command that runs and exits
+  non-zero still settles `completed`.
+- A **DSH version badge** and a **compatibility statement at the top of both READMEs**, plus a
+  version requirement in each install section. Before this, the only version statement in the
+  repository lived in the middle of the verification table, and it named 0.1.7-rc.2.
+
+### Fixed
+
+- **The log path in both READMEs pointed at a shell that no longer exists.** They said
+  `%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log`; that is the discontinued third-party shell,
+  and on the official build there is no `%APPDATA%\DSH Desktop` directory at all. Re-measured
+  against 0.2.0-rc.2: `logs/host` is absent from the asar (`0` hits), and the `logs/` directory
+  under `%APPDATA%\@deepseek-ai\dsh-desktop` is empty. Both READMEs now say where the lines
+  actually are — CLI stdout, or `/voice-alerts status` on every build — which is also what
+  TROUBLESHOOTING.md was corrected to in 0.4.0. The 0.4.0 note claimed this had been fixed;
+  only the troubleshooting file had been.
+- **CI's pinned DSH moved from `0.1.7-rc.2` to `0.2.0-rc.2`**, and its justification comment
+  was rewritten: it still asserted that npm's `latest` was `0.1.5-rc.3`, which stopped being
+  true when 0.2.0-rc.2 was published. `latest` and the pin now agree, and the comment says so
+  along with why the pin still names an exact version.
+
+### Changed
+
+- `docs/verification.md` gained a §0 that records the re-observation, its method, and the two
+  things it did **not** establish: the `onJobDone` fallback (still no 0.1.5/0.1.6 host to run
+  it on) and that sound reaches a speaker on 0.2.0-rc.2 (the stub records the chosen clip).
+- The verification boundary in both READMEs no longer describes 0.1.7 as the newest checked
+  host. The genuinely unknown variable is now stated as "newer than 0.2.0-rc.2", with
+  `0.2.1-alpha.1` named as the untested next thing.
+- `INSTALL.md`, `TROUBLESHOOTING.md` and the version lines they quote moved to 0.4.1.
+
 ## [0.4.0] — 2026-09-25
 
 ### Fixed

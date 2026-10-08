@@ -7,9 +7,11 @@
 > **Audience note for humans:** you probably want [README.md](README.md) instead. This
 > file is the same install, written as precise instructions so an agent gets it right.
 
-Verified against: DSH Desktop (official build) with `@deepseek-ai/dsh` 0.1.7-rc.2, on Windows
-10/11. The background-job scenes use 0.1.7's `jobs.events.subscribe` and fall back to the
-pre-0.1.7 `jobs.onJobDone` automatically, so 0.1.5/0.1.6 hosts keep working too.
+Verified against: DSH Desktop (official build) with `@deepseek-ai/dsh` **0.2.0-rc.2** (the
+current release; 0.4.1 re-audited every host interface and re-triggered all eight scenes on
+it), on Windows 10/11. The background-job scenes use the 0.1.7+ `jobs.events.subscribe` stream
+and fall back to the pre-0.1.7 `jobs.onJobDone` automatically, so **0.1.5 and newer** hosts
+work too. There is no version-specific package to choose.
 
 ---
 
@@ -103,7 +105,7 @@ Do not report success before this restart happens. Say explicitly:
 
 > Installation is done. Please fully quit and reopen DSH Desktop — the plugin only loads at
 > startup. After restarting, run `/voice-alerts status` in the chat box; you should see
-> `Voice alerts: on (v0.4.0)`.
+> `Voice alerts: on (v0.4.1)`.
 
 Only the config file (`$DSH_HOME/voice-alerts.config.json`) is hot-read. The plugin code is
 not.

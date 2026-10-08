@@ -5,8 +5,11 @@
 > 给 DeepSeek Harness 加上「会说话的状态提示」：任务跑完、出错、后台任务结束、需要你回答时，用声音告诉你，而不是只让任务栏图标闪一下。
 
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-lightgrey)
+![DSH](https://img.shields.io/badge/DSH-0.1.5%20%E2%80%93%200.2.0--rc.2-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 [![Awesome DSH Plugin](https://img.shields.io/badge/Awesome%20DSH%20Plugin-%E5%B7%B2%E6%94%B6%E5%BD%95-brightgreen)](https://awesome-dsh-plugin.com/zh/notify/)
+
+> **适配状态（2026-10-09，v0.4.1）**：已在 **DSH Desktop 官方版 0.2.0-rc.2**（当前最新发布版）上逐接口核对并真实触发复核——8 个场景的触发与映射全部通过，其中 **6 个直接观测到实际播报**（含此前从未触发过的 `job-failed`）。`@deepseek-ai/dsh` **0.1.5 起**的版本都支持（0.1.7 的事件变更已兼容，0.1.6 及更早走回退分支）。逐条证据见 [docs/verification.md §0](docs/verification.md)。
 
 ---
 
@@ -60,7 +63,7 @@ DSH 自带的通知是**视觉**的：任务栏图标闪烁 + 系统气泡。这
 `approval` 只在审批策略为 `ask`（需要人工确认）时才会响 —— 策略是 `never` 时没有任何东西在等你，自然也不该出声。它监听的是**会话事件 `approval/asked`**，这条在 `ask` 策略下必定派发；另外还挂了作用域瀑布 `approval/request` 作兜底，两条路径播的是同一条音。
 
 音频试听（GitHub 的 Markdown 不支持内嵌播放器，所以放在 Release 里，点开即可播放）：
-见 [v0.4.0 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.0) 的 **16 个音频附件**——**不带后缀的是中文**（默认那套），带 `.en` 的是英文。
+见 [v0.4.1 release](https://github.com/lijiawei255/dsh-status-chime/releases/tag/v0.4.1) 的 **16 个音频附件**——**不带后缀的是中文**（默认那套），带 `.en` 的是英文。
 
 链接钉在具体 tag 上而不是 `latest`，并且**每个 release 都重新附上这 16 个文件**：音频自 0.3.0 起一个字节都没变（0.4.0 只改了代码），所以每个版本页都能直接试听，不必依赖"某个旧版本还留着附件"。
 
@@ -115,7 +118,8 @@ Clip sets: zh (active): all clips present  |  en: all clips present
 
 1. **平台：Windows 10/11。** 保底播放器用的是 Windows 自带的 PowerShell + `System.Media.SoundPlayer`，**没有 macOS / Linux 支持**。装了 ffmpeg 会优先用 `ffplay`，但那只是可选增强。
 2. **需要 DSH Desktop**，以及能跑 `dsh` 命令的终端。装插件走 `dsh plugin`，它内部调用 **pnpm**（见下面的坑）。
-3. **音频不用装任何东西** —— 中英两套 32 个音频文件都在包里。
+3. **DSH 版本：`@deepseek-ai/dsh` 0.1.5 起都支持**，当前最新版 **0.2.0-rc.2** 已实测复核（见文首「适配状态」）。装了之后插件会自动探测宿主用的是哪一代 jobs 事件接口，不需要你按版本挑安装包。
+4. **音频不用装任何东西** —— 中英两套 32 个音频文件都在包里。
 
 ### ⚠️ 一次性提醒：包名和运行时名字不一样
 
@@ -181,7 +185,7 @@ dsh plugin --profile <PROFILE> add -w github:lijiawei255/dsh-status-chime
 /voice-alerts status
 ```
 
-看到 `Voice alerts: on (v0.4.0)`、`Language: zh`、`Scenes (8)` 就说明装好了。想听一遍全部八条：
+看到 `Voice alerts: on (v0.4.1)`、`Language: zh`、`Scenes (8)` 就说明装好了。想听一遍全部八条：
 
 ```
 /voice-alerts
@@ -366,7 +370,12 @@ node scripts/qa.mjs clips                # 质检
 7. 日志里有 `throttled <场景>` → 被节流窗口挡住了，属于正常行为。
 8. **命令打了没反应？** 如果 `/voice-alerts` 单独打能播（试听 + 状态），但带上参数（`lang en`、`on`、`test <场景>`）就**毫无反应、反而像发了一条普通消息**，多半是**中文输入法把 `/` 打成了全角 `／`**，或者命令名里混进了大写（必须是全小写 `voice-alerts`）。这两种都会让整行不被认作命令。**从自动补全列表里选中命令**可以同时避开这两点。详见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 第 14 节。
 
-日志位置：`%APPDATA%\DSH Desktop\logs\host\dsh-<日期>.log`，搜 `voice-alerts`。
+**日志在哪：官方桌面版不写宿主日志文件**（实测 0.2.0-rc.2：其 `app.asar` 里根本没有 `logs/host` 这个路径，userData 下的 `logs/` 目录是空的，只有崩溃报告 `%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*.log`）。所以看 `[voice-alerts]` 那一行有两个办法：
+
+- 在**终端里用 CLI 跑**，日志直接打在 stdout；
+- 或者在聊天框里敲 **`/voice-alerts status`** —— 它把探测到的播放器、配置路径、音频齐备情况全列出来，**任何构建上都可用**，也是排查时最该先看的那一条。
+
+（`%APPDATA%\DSH Desktop\logs\host\…` 是**已停用的第三方版**路径，0.4.1 起本文不再引用。）
 
 ⚠️ **一件事先说明**：日志里**没有** `ffplay` **不是故障**。ffplay 属于 ffmpeg，需要另外安装；它只是让启动快一点、音量可独立调节。没有它时插件会用 Windows 自带的 PowerShell 播放器，功能完全正常。
 
@@ -405,16 +414,19 @@ node scripts/qa.mjs clips                # 质检
 | 项 | 值 |
 |---|---|
 | 操作系统 | Windows 11 |
-| DSH | DSH Desktop（官方版），`@deepseek-ai/dsh` **0.1.7-rc.2** |
+| DSH | DSH Desktop（官方版），`@deepseek-ai/dsh` **0.2.0-rc.2** |
 | 该机器上的额外软件 | 装有 ffmpeg、Python 3、阿里云百炼 CLI |
 
+> **0.4.1 的复核（2026-10-09）**：0.4.0 之前这一格写的是 **0.1.7-rc.2**，而 0.2.0-rc.2（当前最新发布版，9/29 发布）之后仓库没有任何提交，所以整份记录都是拿**两代之前的宿主**写下的。0.4.1 做了两件事：把插件用到的每个宿主接口在官方 0.2.0-rc.2 的 `app.asar` 里逐个核对（**没有一个被删除或改名**），然后在真实 0.2.0-rc.2 宿主上把 8 个场景全部重新触发了一遍——**6 个直接观测到实际播报**，其中 `job-failed` 是**首次**被真实触发。逐条证据见 [docs/verification.md §0](docs/verification.md)。
+>
 > 上一版（0.3.0）验证的是 **0.1.5-rc.2**。0.1.7 移除了 `jobs.onJobDone`，后台任务两个场景因此静默失效；0.4.0 就是为这件事发的——它改用 0.1.7 的 `jobs.events.subscribe`，同时保留对旧 API 的回退，所以 0.1.5/0.1.6 也照常可用。
 
 **这意味着**：
 
 - ✅ **代码正确性、事件映射、音频质量**——与本机装了什么无关，结论可迁移到你的机器。
 - ✅ **「干净 Windows 零依赖」**——保底播放器用的是 Windows 自带的 PowerShell 5.1 + .NET `System.Media.SoundPlayer`，两者都是 Win10/11 的**操作系统组件**；无 ffmpeg 的情形已通过模拟验证。
-- ⚠️ **DSH 版本**——**在 0.1.7-rc.2 与 0.1.5 系上验证过**（后者由自测的旧 API 阶段模拟，不是真机）。再往后的版本若又改事件接口，某些场景可能再次失效。这是唯一真正未知、且我无法在本机消除的变数。
+- ✅ **DSH 0.2.0-rc.2（当前最新版）**——接口逐个核对 + 8 个场景真实触发（见上）。
+- ⚠️ **比 0.2.0-rc.2 更新的版本**——`0.2.1-alpha.1` 已存在但未测。DSH 改事件接口时确实可能让某些场景静默失效（0.1.7 那次就是），所以这一条仍然是「未知」，只是未知的边界从 0.1.7 推到了 0.2.0-rc.2。
 - ⚠️ **在一台完全干净的、别人的 Windows 上从 GitHub 安装**——**我没有第二台机器，没有实测过这一步**。CI（见下）在 GitHub 提供的干净 Windows 运行器上覆盖了「安装 + 加载 + 后端探测」，但**运行器没有声卡，无法验证声音真的到了扬声器**。
 
 如果你在别的 DSH 版本或别的机器上遇到问题，请提 Issue 并附上日志里的 `[voice-alerts] active …` 那一行（它会写明探测到的播放器和配置路径），那基本能一眼定位。
@@ -423,14 +435,17 @@ node scripts/qa.mjs clips                # 质检
 
 | 层级 | 状态 |
 |---|---|
-| **事件层** | 8 个场景中 **7 个由真实事件触发验证过**：`turn-done`、`turn-error`、`needs-input`、`job-done`、`goal-complete`、`goal-blocked`、`approval` |
+| **事件层** | **8 个场景全部在 0.2.0-rc.2 上重新触发过**：其中 6 个观测到实际播报（`needs-input`、`approval`、`goal-complete`、`goal-blocked`、`job-done`、`job-failed`），`turn-done` 与 `turn-error` 观测到正确决策、正确音频与玩家进程已启动，但**一次性宿主在 turn 结束即拆解插件**，播放被卸载清理掐断（桌面宿主长驻，不存在这一条） |
 | **音频层** | 中英各 8 条、共 16 条**全部通过自动质检**（ASR 相似度 1.000、清晰/干净 10/10、无削波）。其中**中文那 8 条另做过逐条耳听确认**；**英文那 8 条没做过这一步**，只过了自动质检 |
 | **后端层** | 强制 PowerShell 会正确选 `.wav`；模拟「没装 ffmpeg」时自动回退且仍能播；显式指定不存在的 ffplay 会明确失败而不偷偷换后端 |
+| **接口层** | 插件用到的每个服务、事件与字段名都在官方 0.2.0-rc.2 的 `app.asar`（8097 个 JS 文件）里核对过，**无一被删除或改名**；唯一消失的是 0.1.7 就已移除的 `jobs.onJobDone`（回退分支，不触发即按设计） |
 | **代码层** | `scripts/selftest.mjs` 用模拟上下文驱动插件，**76 项检查**覆盖事件映射、过滤规则、优先级、节流、命令、重名冲突、资产解析顺序、语言切换与回退，以及**新旧两代 jobs 事件 API 的探测与回退** |
 | **语言层** | 默认中文、`lang en` 切换后确实改选英文文件（自测断言的是**解析到的文件名**，不只是状态文字）；配置里写无法识别的语言会**回退到中文**而不是静默 |
-| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、76 项自检、隐私扫描 |
+| **CI** | `.github/workflows/verify.yml` 在干净的 `windows-latest` 上验证：真实安装并登记为 profile 层、清单无 BOM、只依赖 Node 内置模块、32 个音频齐备（8 场景 × 2 语言 × 2 格式）、**无 ffplay 时 PowerShell 后端仍被探测到**、76 项自检、隐私扫描。**0.4.1 起钉的是 0.2.0-rc.2** |
 
 关于 `approval` 的验证要说清楚边界：**触发时审批策略必须是 `ask`**。我本人是在 `ask` 策略下听到提示音的，但当时**无法区分**它走的是会话事件 `approval/asked` 还是兜底的作用域瀑布 `approval/request` —— 两条路径播同一条音。会话事件那条的**行为**由自检覆盖（含「子代理会话的审批不出声」），但它是否在生产环境中被派发，我没有单独取证过。
+
+> 补充（0.4.1）：这次在 0.2.0-rc.2 上把 `approval` 真的触发了——宿主把「写工作区之外的路径」判成需要审批，插件随即播了 `approval.wav`。**两条路径仍然无法区分**（它们播同一条音），但「在 0.2.0-rc.2 的 `ask` 策略下确实会响」这一点现在是实测的。另外，本机当前的审批策略是 `never`——**那种情况下不会响，这是按设计**：没有任何东西在等你，自然不该出声。
 
 CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部——包括**它不能证明声音到达扬声器**这一点。
 
@@ -438,11 +453,11 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 
 **`job-failed` 对「后台 shell 命令非零退出」实际不可达。**
 
-实测：一个以后台方式运行、`exit 7` 结束的命令，DSH 把它的状态记为 `completed`，于是播的是「后台任务完成」。原因是 job 的状态只有 `completed` / `killed` / `failed` 三种终态，而 shell 后台任务的生产者只会产出前两种；`failed` 保留给「后台**工具**任务报告错误」或生产方合约违约的情况。**这是框架行为，0.1.7 里依然如此**，不是本插件的实现问题。
+实测：一个以后台方式运行、`exit 7` 结束的命令，DSH 把它的状态记为 `completed`，于是播的是「后台任务完成」。原因是 job 的状态只有 `completed` / `killed` / `failed` 三种终态，而 shell 后台任务的生产者只会产出前两种；`failed` 保留给「后台**工具**任务报告错误」或生产方合约违约的情况。**这是框架行为，0.2.0-rc.2 里依然如此**，不是本插件的实现问题。
 
 0.1.7 新增了一个**可观察点**：job 详情里现在带 `exit code: N`，所以非零退出在日志里看得到了。但我**故意不去解析它**——那是写给人看的字符串，把它当契约，下次框架改措辞就会静默失效。想要「非零退出也响」的话，正确做法是让 DSH 把退出码变成状态字段，而不是在这里猜文本。
 
-这个场景**保留**了（它对工具任务失败是有效的），但它的触发**未被真实复现过**，只有代码层面的核对。你可以用 `/voice-alerts test job-failed` 验证音频本身没问题。
+**0.4.1 更新：这个场景的触发现在被真实观测到了。** 触发它的是上面预测的那条路径——一个后台**工具**任务失败：那次后台 `pwsh` 作业因为沙箱没能给工作区套上写 ACL 而根本没能启动，生产者把它记成终态 `failed`，插件于是播了 `job-failed.wav`（复现两次）；把沙箱切到 `danger-full-access` 后同一个作业正常完成，播的就是 `job-done.wav`——正是这个场景存在的意义。所以现在的口径是：**「后台 shell 命令非零退出」仍然不可达（框架行为），但「后台工具任务失败」已实测可达**。
 
 ### 0.4.0 修的是哪一处
 
@@ -451,6 +466,18 @@ CI 的详细「证明了什么 / 没证明什么」写在 workflow 文件头部�
 - 只认 `settled`；`registered` / `progress` / `stopping` / `output` / `removed` 一律忽略。
 - `awaited: true`（已有等待者收走结果）与 `cause: 'teardown'`（会话归档、宿主退出）都**不出声**——否则每次关程序都会响一声，`job_wait` 也会重复播报。
 - 旧 API 仍然保留为回退分支：宿主没有 `events.subscribe` 时自动走 `onJobDone`，并在日志里说明用的是哪一条。两条分支都由自测覆盖。
+
+### 0.4.1 做了什么
+
+**没有改插件代码**——0.2.0-rc.2 没有破坏任何接口，所以这一版是「复核 + 标注」：
+
+- 在官方 0.2.0-rc.2 上逐接口核对（[docs/verification.md §0a](docs/verification.md)），并真实触发 8 个场景（§0b/§0c）。
+- 把**文首的适配状态、徽章、安装章节的版本要求**补上——此前版本口径只出现在本文中后段的「验证边界」表里，而且写的是 0.1.7。
+- CI 的钉版从 `0.1.7-rc.2` 升到 `0.2.0-rc.2`，并修掉那段已经过期的注释（它还在说「npm 的 `latest` 是 0.1.5-rc.3」）。
+- 修掉两份 README 里**已停用的第三方版日志路径**（见上面「装了没声音」第 9 条附近的说明）。
+- GitHub 仓库描述补上版本信息。
+
+一句话：**0.4.1 是「确认 0.4.0 在 0.2.0-rc.2 上仍然成立，并且把这件事写在别人一眼能看到的地方」那一版。**
 
 ## 本地与开源：镜像，以及唯一允许的差异
 
